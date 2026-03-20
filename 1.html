@@ -582,7 +582,7 @@
         }
 
         // ─── AI 聊天逻辑 ───
-        const API_URL = "https://ai-citywalk-assistant.onrender.com";
+        const API_URL = "https://ai-citywalk-assistant.onrender.com/api/chat";
         let chatHistory = []; // 记忆历史
 
         const chatMessages = document.getElementById('chat-messages');
@@ -736,7 +736,7 @@
             try {
                 const poiNames = allPois.map(p => p.title);
                 const recentHistory = chatHistory.slice(-10);
-                const filterResp = await fetch('http://localhost:8000/api/filter_pois', {
+                const filterResp = await fetch('https://ai-citywalk-assistant.onrender.com/api/filter_pois', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
