@@ -14,7 +14,8 @@
             box-sizing: border-box;
         }
 
-        html, body {
+        html,
+        body {
             width: 100%;
             height: 100%;
             font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
@@ -212,8 +213,15 @@
         }
 
         @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
         }
 
         /* ─── 聊天消息区 ─── */
@@ -243,8 +251,15 @@
         }
 
         @keyframes msgIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to   { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .msg.user {
@@ -311,12 +326,27 @@
             animation: typing 1.4s infinite;
         }
 
-        .typing-dot:nth-child(2) { animation-delay: .2s; }
-        .typing-dot:nth-child(3) { animation-delay: .4s; }
+        .typing-dot:nth-child(2) {
+            animation-delay: .2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: .4s;
+        }
 
         @keyframes typing {
-            0%, 60%, 100% { opacity: .3; transform: scale(.8); }
-            30% { opacity: 1; transform: scale(1); }
+
+            0%,
+            60%,
+            100% {
+                opacity: .3;
+                transform: scale(.8);
+            }
+
+            30% {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
 
         /* ─── 输入栏 ─── */
@@ -382,6 +412,7 @@
         #route-list::-webkit-scrollbar {
             width: 3px;
         }
+
         #route-list::-webkit-scrollbar-thumb {
             background: rgba(79, 172, 254, 0.3);
             border-radius: 2px;
@@ -432,7 +463,9 @@
             <div id="chat-input-bar">
                 <input type="text" id="chat-input" placeholder="问问小徐：这附近有什么好吃的？" autocomplete="off">
                 <button id="send-btn" onclick="sendMessage()">
-                    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
                 </button>
             </div>
         </div>
@@ -549,14 +582,14 @@
         }
 
         // ─── AI 聊天逻辑 ───
-        const API_URL = "http://localhost:8000/api/chat";
+        const API_URL = "https://ai-citywalk-assistant.onrender.com";
         let chatHistory = []; // 记忆历史
 
         const chatMessages = document.getElementById('chat-messages');
         const chatInput = document.getElementById('chat-input');
 
         // 回车发送
-        chatInput.addEventListener('keydown', function(e) {
+        chatInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -617,7 +650,7 @@
                 removeTyping();
 
                 if (data.action === "plan_route") {
-                    appendMessage('assistant', `好的，正在为您在附近 4km 内搜索包含“${data.keywords.join('、')}”的地点，并规划最佳路线...`);
+                    appendMessage('assistant', `好的，正在为您在附近搜索包含“${data.keywords.join('、')}”的地点，并规划最佳路线...`);
                     // 不直接把搜索动画加进大模型历史上下文，交给 searchAndPlanRoute 去补充
                     searchAndPlanRoute(data.keywords);
                 } else {
@@ -639,15 +672,15 @@
             const dLat = toRad(p2.lat - p1.lat);
             const dLng = toRad(p2.lng - p1.lng);
             const a = Math.sin(dLat / 2) ** 2 +
-                      Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) *
-                      Math.sin(dLng / 2) ** 2;
+                Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) *
+                Math.sin(dLng / 2) ** 2;
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
         // ─── AI 调用的百度地图周边搜索与智能路径规划 ───
         async function searchAndPlanRoute(keywords) {
             if (!currentUserPoint) {
-                appendMessage('assistant', '抱歉，需要先在左上角输入您的当前位置完成定位，我才能帮您规划路线哦。');
+                appendMessage('assistant', '抱歉，需要您的当前位置完成定位，我才能帮您规划路线哦。');
                 return;
             }
 
@@ -655,13 +688,13 @@
 
             // 逐个关键词搜索，合并所有 POI
             let allPois = [];
-            
+
             for (const keyword of keywords) {
                 console.log('[searchAndPlanRoute] 搜索关键词:', keyword);
                 const pois = await new Promise((resolve) => {
                     const local = new BMapGL.LocalSearch(map, {
                         pageCapacity: 10,
-                        onSearchComplete: function(result) {
+                        onSearchComplete: function (result) {
                             let found = [];
                             if (local.getStatus() === BMAP_STATUS_SUCCESS && result) {
                                 const num = result.getCurrentNumPois();
@@ -737,7 +770,7 @@
             while (remainingPois.length > 0) {
                 let nearestIdx = -1;
                 let minDist = Infinity;
-                
+
                 for (let i = 0; i < remainingPois.length; i++) {
                     const d = haversineDistance(currentPt, remainingPois[i].point);
                     if (d < minDist) {
@@ -745,10 +778,10 @@
                         nearestIdx = i;
                     }
                 }
-                
+
                 if (nearestIdx === -1) break;
                 if (currentDist + minDist > maxDist) break;
-                
+
                 const nextPoi = remainingPois[nearestIdx];
                 currentDist += minDist;
                 plannedRoute.push({
@@ -758,7 +791,7 @@
                 });
                 currentPt = { lat: nextPoi.point.lat, lng: nextPoi.point.lng };
                 remainingPois.splice(nearestIdx, 1);
-                
+
                 if (plannedRoute.length >= 6) break; // 最多途经 5 个景点
             }
 
@@ -793,12 +826,12 @@
             for (let i = 1; i < plannedRoute.length; i++) {
                 reportText += `${i}. ${plannedRoute[i].name}<br>`;
             }
-            
+
             // 追加进大模型历史
             const userKeywords = keywords.join("、");
             chatHistory.push({ role: 'user', content: `我们要去包含${userKeywords}的地方` });
             chatHistory.push({ role: 'assistant', content: reportText.replace(/<br>/g, "\n") });
-            
+
             appendMessage('assistant', reportText);
         }
 
