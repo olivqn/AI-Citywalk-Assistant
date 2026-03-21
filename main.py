@@ -5,6 +5,7 @@ AI 伴游导览 FastAPI 后端
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 import json
@@ -106,7 +107,7 @@ async def chat(req: ChatRequest):
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "AI Citywalk 伴游助手后端运行中"}
+    return FileResponse("1.html")
 
 
 # ─── POI 智能过滤功能 ───
@@ -119,7 +120,7 @@ FILTER_SYSTEM_PROMPT = """你是一个地点筛选助手。用户在进行城市
 1. 如果用户明确提到了想去的类型（如"咖啡馆"、"书店"、"老洋房"），只保留与该类型相关的地点。
 2. 如果用户没有指定具体类型，默认保留：名胜古迹、历史街区、特色建筑、文化场馆、公园、知名商圈等具有可玩性和探索性的地点。
 3. 删除以下类型的地点：普通住宅小区、停车场、加油站、医院、银行网点、政府办事机构、普通写字楼、工地等无游览价值的地点。
-4. 保留的地点数量控制在 3~8 个为佳。
+4. 保留的地点数量控制在 3~10 个为佳。
 
 【输出格式】
 你必须仅输出一个 JSON 数组，包含你认为应该保留的地点名称（原名，不要修改），不要输出任何额外文字！
