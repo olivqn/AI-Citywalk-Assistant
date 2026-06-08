@@ -10,7 +10,10 @@ from pydantic import BaseModel
 import httpx
 import json
 import os
+from dotenv import load_dotenv
 from typing import List, Optional
+
+load_dotenv()
 
 app = FastAPI(title="AI Citywalk 伴游助手")
 

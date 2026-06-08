@@ -81,6 +81,7 @@
             border: 1px solid rgba(79, 172, 254, 0.25);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             width: 260px;
+            overflow: visible;
         }
 
         #panel h3 {
@@ -90,10 +91,14 @@
             margin-bottom: 12px;
         }
 
+        .location-search {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
         .input-group {
             display: flex;
             gap: 8px;
-            margin-bottom: 12px;
         }
 
         .input-group input {
@@ -114,6 +119,65 @@
 
         .input-group input::placeholder {
             color: #5a7a9a;
+        }
+
+        #gps-suggestions {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            z-index: 1001;
+            display: none;
+            max-height: 230px;
+            overflow-y: auto;
+            background: rgba(9, 20, 34, 0.98);
+            border: 1px solid rgba(79, 172, 254, 0.35);
+            border-radius: 8px;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+        }
+
+        .gps-suggestion {
+            width: 100%;
+            padding: 9px 10px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(79, 172, 254, 0.1);
+            color: #c8d6e5;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .gps-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .gps-suggestion:hover,
+        .gps-suggestion:focus {
+            background: rgba(79, 172, 254, 0.12);
+            outline: none;
+        }
+
+        .gps-suggestion .poi-name {
+            display: block;
+            color: #e0e6ed;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        .gps-suggestion .poi-address {
+            display: block;
+            margin-top: 3px;
+            color: #7891ac;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .gps-suggestion-empty {
+            padding: 10px;
+            color: #7891ac;
+            font-size: 12px;
+            line-height: 1.5;
         }
 
         .btn {
@@ -437,9 +501,12 @@
             <div id="container"></div>
             <div id="panel">
                 <h3>📍 路线规划</h3>
-                <div class="input-group">
-                    <input type="text" id="gps-input" value="上海图书馆" placeholder="输入当前位置">
-                    <button class="btn" onclick="simulateGPS()">定位</button>
+                <div class="location-search">
+                    <div class="input-group">
+                        <input type="text" id="gps-input" value="上海图书馆" placeholder="输入当前位置" autocomplete="off">
+                        <button class="btn" onclick="simulateGPS()">定位</button>
+                    </div>
+                    <div id="gps-suggestions"></div>
                 </div>
                 <ul id="route-list">
                     <li>等待定位...</li>
@@ -473,6 +540,9 @@
 
     <script>
         let currentUserPoint = null; // 在 simulateGPS 中保存，供 AI 路线规划使用
+        let selectedGpsSuggestion = null;
+        let gpsDebounceTimer = null;
+        let gpsSearchSeq = 0;
 
         // ─── 百度地图初始化 ───
         const map = new BMapGL.Map("container");
@@ -487,41 +557,199 @@
             { name: "徐家汇天主堂", lng: 121.442967, lat: 31.198305 }
         ];
 
-        // ─── 模拟定位 ───
+        const gpsInput = document.getElementById("gps-input");
+        const gpsSuggestions = document.getElementById("gps-suggestions");
+
+        function escapeHTML(str) {
+            return String(str || "").replace(/[&<>"']/g, char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[char]));
+        }
+
+        function formatPoiAddress(poi) {
+            const parts = [poi.province, poi.city, poi.address]
+                .filter(Boolean)
+                .map(part => String(part).trim())
+                .filter(Boolean);
+            return parts.length > 0 ? parts.join(" ") : "暂无详细地址";
+        }
+
+        function hideGpsSuggestions() {
+            gpsSuggestions.style.display = "none";
+            gpsSuggestions.innerHTML = "";
+        }
+
+        function showGpsSuggestionMessage(message) {
+            gpsSuggestions.innerHTML = `<div class="gps-suggestion-empty">${escapeHTML(message)}</div>`;
+            gpsSuggestions.style.display = "block";
+        }
+
+        function renderGpsSuggestions(pois) {
+            if (pois.length === 0) {
+                showGpsSuggestionMessage("没有找到匹配地点，请输入更具体的地标。");
+                return;
+            }
+
+            gpsSuggestions.innerHTML = pois.map((poi, index) => `
+                <button type="button" class="gps-suggestion" data-index="${index}">
+                    <span class="poi-name">${escapeHTML(poi.title)}</span>
+                    <span class="poi-address">${escapeHTML(formatPoiAddress(poi))}</span>
+                </button>
+            `).join("");
+            gpsSuggestions.style.display = "block";
+
+            gpsSuggestions.querySelectorAll(".gps-suggestion").forEach(button => {
+                button.addEventListener("mousedown", event => event.preventDefault());
+                button.addEventListener("click", () => {
+                    const poi = pois[Number(button.dataset.index)];
+                    confirmGpsSuggestion(poi);
+                });
+            });
+        }
+
+        function requestGpsSuggestions(keyword) {
+            const query = keyword.trim();
+            selectedGpsSuggestion = null;
+
+            if (!query) {
+                hideGpsSuggestions();
+                return;
+            }
+
+            const seq = ++gpsSearchSeq;
+            showGpsSuggestionMessage("正在搜索候选地点...");
+
+            const local = new BMapGL.LocalSearch("上海市", {
+                pageCapacity: 8,
+                onSearchComplete: function (result) {
+                    if (seq !== gpsSearchSeq) return;
+
+                    if (local.getStatus() !== BMAP_STATUS_SUCCESS || !result) {
+                        showGpsSuggestionMessage("暂时没有搜索到候选地点。");
+                        return;
+                    }
+
+                    const pois = [];
+                    const count = result.getCurrentNumPois();
+                    for (let i = 0; i < count; i++) {
+                        const poi = result.getPoi(i);
+                        if (poi && poi.title && poi.point) {
+                            pois.push(poi);
+                        }
+                    }
+                    renderGpsSuggestions(pois);
+                }
+            });
+
+            local.search(query);
+        }
+
+        function confirmGpsSuggestion(poi) {
+            if (!poi || !poi.point) return;
+
+            selectedGpsSuggestion = {
+                name: poi.title,
+                address: formatPoiAddress(poi),
+                point: poi.point
+            };
+            gpsInput.value = selectedGpsSuggestion.name;
+            hideGpsSuggestions();
+            applyUserStartPoint(
+                selectedGpsSuggestion.point,
+                selectedGpsSuggestion.name,
+                selectedGpsSuggestion.address
+            );
+        }
+
+        gpsInput.addEventListener("input", function () {
+            clearTimeout(gpsDebounceTimer);
+            gpsDebounceTimer = setTimeout(() => {
+                requestGpsSuggestions(gpsInput.value);
+            }, 300);
+        });
+
+        gpsInput.addEventListener("focus", function () {
+            if (gpsInput.value.trim() && !selectedGpsSuggestion) {
+                requestGpsSuggestions(gpsInput.value);
+            }
+        });
+
+        gpsInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                simulateGPS();
+            }
+            if (e.key === "Escape") {
+                hideGpsSuggestions();
+            }
+        });
+
+        document.addEventListener("click", function (e) {
+            if (!document.querySelector(".location-search").contains(e.target)) {
+                hideGpsSuggestions();
+            }
+        });
+
+        function applyUserStartPoint(point, displayName, detailAddress) {
+            currentUserPoint = point;
+
+            document.getElementById('route-list').innerHTML = "<li>路线规划中...</li>";
+            map.clearOverlays();
+
+            // 蓝色大箭头标识用户位置
+            const arrowHTML = `<div style="font-size: 44px; color: #4facfe; filter: drop-shadow(0 2px 6px rgba(79,172,254,0.6)); transform: rotate(-90deg); line-height:1;">➤</div>`;
+            const userArrow = new BMapGL.Label(arrowHTML, {
+                position: point,
+                offset: new BMapGL.Size(-22, -22)
+            });
+            userArrow.setStyle({ background: 'transparent', border: 'none' });
+            map.addOverlay(userArrow);
+            map.panTo(point);
+
+            // 组装路线
+            const fullRoute = [
+                { name: "我的位置", lng: point.lng, lat: point.lat, isStart: true },
+                ...baseRoute
+            ];
+
+            const startLabel = detailAddress && detailAddress !== "暂无详细地址"
+                ? `${displayName}｜${detailAddress}`
+                : displayName;
+
+            // 更新面板
+            document.getElementById('route-list').innerHTML = fullRoute.map((spot, index) => {
+                if (spot.isStart) return `<li class="start-point">📍 您的位置：${escapeHTML(startLabel)}</li>`;
+                return `<li>${index}. ${escapeHTML(spot.name)}</li>`;
+            }).join('');
+
+            drawCitywalkRoute(fullRoute);
+        }
+
+        // ─── 定位：优先使用下拉二次确认的精准 POI，其次再走地址解析兜底 ───
         function simulateGPS() {
-            const address = document.getElementById("gps-input").value;
+            const address = gpsInput.value.trim();
             if (!address) return alert("请输入位置");
 
+            if (selectedGpsSuggestion && selectedGpsSuggestion.name === address) {
+                applyUserStartPoint(
+                    selectedGpsSuggestion.point,
+                    selectedGpsSuggestion.name,
+                    selectedGpsSuggestion.address
+                );
+                return;
+            }
+
+            hideGpsSuggestions();
             document.getElementById('route-list').innerHTML = "<li>路线规划中...</li>";
 
             const myGeo = new BMapGL.Geocoder();
             myGeo.getPoint(address, function (point) {
                 if (point) {
-                    currentUserPoint = point; // 保存当前定位结果
-                    map.clearOverlays();
-
-                    // 蓝色大箭头标识用户位置
-                    const arrowHTML = `<div style="font-size: 44px; color: #4facfe; filter: drop-shadow(0 2px 6px rgba(79,172,254,0.6)); transform: rotate(-90deg); line-height:1;">➤</div>`;
-                    const userArrow = new BMapGL.Label(arrowHTML, {
-                        position: point,
-                        offset: new BMapGL.Size(-22, -22)
-                    });
-                    userArrow.setStyle({ background: 'transparent', border: 'none' });
-                    map.addOverlay(userArrow);
-
-                    // 组装路线
-                    const fullRoute = [
-                        { name: "我的位置", lng: point.lng, lat: point.lat, isStart: true },
-                        ...baseRoute
-                    ];
-
-                    // 更新面板
-                    document.getElementById('route-list').innerHTML = fullRoute.map((spot, index) => {
-                        if (spot.isStart) return `<li class="start-point">📍 您的位置：${address}</li>`;
-                        return `<li>${index}. ${spot.name}</li>`;
-                    }).join('');
-
-                    drawCitywalkRoute(fullRoute);
+                    applyUserStartPoint(point, address, "");
                 } else {
                     alert("无法解析该地址，请尝试输入具体地标");
                     document.getElementById('route-list').innerHTML = "<li>定位失败</li>";

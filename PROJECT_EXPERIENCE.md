@@ -23,6 +23,7 @@ dachuangX/
 ├── PROJECT_EXPERIENCE.md
 ├── requirements.txt
 ├── .gitignore
+├── .env
 ├── __pycache__/
 │   └── main.cpython-311.pyc
 └── .git/
@@ -34,6 +35,7 @@ dachuangX/
 - `1.html` 是当前唯一前端页面，由后端根路由 `/` 直接返回。
 - `requirements.txt` 记录当前后端运行依赖。
 - `.gitignore` 已忽略 `__pycache__/` 和 `*.pyc`。
+- `.env` 保存本地运行用的 `SILICONFLOW_API_KEY`，已被 `.gitignore` 忽略，不要提交到远程仓库。
 - `__pycache__` 是生成目录。当前 `__pycache__/main.cpython-311.pyc` 已被 git 跟踪过，`.gitignore` 不会自动取消跟踪。
 
 ## 3. 运行方式
@@ -56,6 +58,7 @@ http://127.0.0.1:8000/
 - `uvicorn`
 - `httpx`
 - `pydantic`
+- `python-dotenv`
 
 如果本地没有依赖，可以通过 `requirements.txt` 安装。
 如果本地没有依赖，可以执行：
@@ -95,7 +98,7 @@ pip install -r requirements.txt
 - 聊天/意图识别模型：`Qwen/Qwen3.5-122B-A10B`
 - POI 过滤模型：`Qwen/Qwen3.5-27B`
 - API 服务：硅基流动 chat completions 接口。
-- API Key 来源：环境变量 `SILICONFLOW_API_KEY`。
+- API Key 来源：环境变量 `SILICONFLOW_API_KEY`，本地会通过 `.env` 自动加载。
 
 重要行为：
 
@@ -135,11 +138,13 @@ pip install -r requirements.txt
 
 - 使用百度地图 WebGL SDK：`BMapGL`。
 - 默认中心点在徐汇附近：`121.445, 31.205`。
+- 定位搜索栏已在纯前端实现防抖候选搜索：输入停止约 300ms 后用 `BMapGL.LocalSearch` 搜索上海市候选 POI。
+- 候选下拉菜单会展示 POI 名称和详细地址，用户点击候选后会把该 POI 坐标作为“我的位置”并立即触发原有路线绘制。
 - 默认路线点：
   - 武康大楼
   - 百代小红楼
   - 徐家汇天主堂
-- `simulateGPS()` 会用百度 geocoder 把输入地址解析成点位，并绘制“我的位置 + 默认路线”。
+- `simulateGPS()` 会优先使用用户下拉二次确认过的 POI 坐标；没有确认候选时才用百度 geocoder 解析输入文本作为兜底。
 - `drawCitywalkRoute(routeArr)` 使用 `BMapGL.WalkingRoute` 拼接步行路径，然后画 polyline 和景点 marker。
 
 聊天能力：
@@ -233,11 +238,13 @@ __pycache__/
 - 先确认前端当前请求云端还是本地。
 - 改模型调用时注意两个接口分别使用不同模型。
 - 改 prompt 时保持“路线规划必须只输出 JSON”的约束，否则前端动作识别会断。
-- 任何 API Key、密钥、部署 URL 优先做成环境变量或配置。
+- 本地 API Key 放在 `.env`，不要提交到远程仓库；部署环境仍应在平台环境变量里配置。
 
 写前端前：
 
 - 先确认百度地图 SDK 是否能正常加载。
+- 定位搜索栏是纯前端逻辑，不经过 FastAPI；相关函数主要是 `requestGpsSuggestions()`、`renderGpsSuggestions()`、`confirmGpsSuggestion()`、`applyUserStartPoint()`。
+- 位置候选搜索有 300ms 防抖；选中候选后会直接更新 `currentUserPoint` 并自动触发默认路线绘制。
 - 改聊天逻辑时注意 `chatHistory` 的更新时机：路线规划分支不会立即写入原始用户消息，而是在路线规划完成后写入概括内容。
 - 改地图覆盖物时注意 `map.clearOverlays()` 会清掉旧标记和路线，需要重画用户位置。
 - 改路线规划时注意 `currentUserPoint` 必须先存在，否则无法搜索附近地点。
