@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 import json
+import os
 from typing import List, Optional
 
 app = FastAPI(title="AI Citywalk 伴游助手")
@@ -22,7 +23,7 @@ app.add_middleware(
 )
 
 # ─── 硅基流动 API 配置 ───
-SILICONFLOW_API_KEY = "sk-gjobmvivhgtbfjvoagztqugidzkphnrpgbdcdxnkdvrykyoi"
+SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
 SILICONFLOW_API_URL = "https://api.siliconflow.cn/v1/chat/completions"
 MODEL_NAME = "Qwen/Qwen3.5-122B-A10B"
 
