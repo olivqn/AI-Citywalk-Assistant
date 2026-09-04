@@ -229,6 +229,79 @@
             border-left-color: rgba(79, 172, 254, 0.15);
         }
 
+        #ai-context {
+            display: none;
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(79, 172, 254, 0.08);
+            border-radius: 8px;
+        }
+
+        #ai-context.visible {
+            display: block;
+        }
+
+        .context-title,
+        .route-summary-title {
+            color: #c8d6e5;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 7px;
+        }
+
+        #context-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .context-chip {
+            padding: 3px 7px;
+            border-radius: 999px;
+            color: #bfe8ff;
+            background: rgba(79, 172, 254, 0.14);
+            font-size: 11px;
+        }
+
+        #ai-interpretation {
+            margin-top: 7px;
+            color: #7891ac;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        #route-summary {
+            display: none;
+            margin-bottom: 8px;
+            color: #8ea4bd;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        #route-summary.visible {
+            display: block;
+        }
+
+        #route-list li.route-stop {
+            cursor: pointer;
+            padding-top: 7px;
+            padding-bottom: 7px;
+        }
+
+        .route-stop-name {
+            display: block;
+            color: #c8d6e5;
+            font-weight: 700;
+        }
+
+        .route-stop-reason {
+            display: block;
+            margin-top: 2px;
+            color: #657f9b;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
         /* ─── 下方聊天面板 ─── */
         #chat-panel {
             height: 280px;
@@ -472,6 +545,107 @@
             fill: #0a1628;
         }
 
+        #send-btn:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .quick-prompts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-left: 36px;
+        }
+
+        .quick-prompt {
+            padding: 6px 10px;
+            border: 1px solid rgba(79, 172, 254, 0.25);
+            border-radius: 999px;
+            color: #8fcdf5;
+            background: rgba(79, 172, 254, 0.06);
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .quick-prompt:hover {
+            background: rgba(79, 172, 254, 0.14);
+        }
+
+        .ai-progress {
+            display: grid;
+            gap: 5px;
+        }
+
+        .ai-progress-step {
+            color: #69819a;
+        }
+
+        .ai-progress-step.active {
+            color: #bfe8ff;
+        }
+
+        .ai-progress-step.done {
+            color: #55d6a0;
+        }
+
+        .theme-note {
+            margin-top: 7px;
+            padding-top: 7px;
+            border-top: 1px solid rgba(79, 172, 254, 0.16);
+            color: #8fcdf5;
+            font-size: 12px;
+        }
+
+        @media (max-width: 640px) {
+            #header {
+                padding: 8px 12px;
+            }
+
+            #header .subtitle {
+                display: none;
+            }
+
+            #map-section {
+                min-height: 43vh;
+            }
+
+            #panel {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                width: auto;
+                padding: 12px;
+                max-height: 210px;
+                overflow-y: auto;
+                overflow-anchor: none;
+            }
+
+            #panel h3 {
+                display: none;
+            }
+
+            #route-list {
+                max-height: 76px;
+            }
+
+            .route-stop-reason {
+                display: none;
+            }
+
+            #chat-panel {
+                height: 48vh;
+                min-height: 300px;
+            }
+
+            .msg {
+                max-width: 94%;
+            }
+
+            .quick-prompts {
+                margin-left: 0;
+            }
+        }
+
         /* ─── 滚动条 ─── */
         #route-list::-webkit-scrollbar {
             width: 3px;
@@ -503,13 +677,19 @@
                 <h3>📍 路线规划</h3>
                 <div class="location-search">
                     <div class="input-group">
-                        <input type="text" id="gps-input" value="上海图书馆" placeholder="输入当前位置" autocomplete="off">
-                        <button class="btn" onclick="simulateGPS()">定位</button>
+                        <input type="text" id="gps-input" placeholder="输入起点，如上海图书馆" autocomplete="off">
+                        <button class="btn" id="set-start-btn">设为起点</button>
                     </div>
                     <div id="gps-suggestions"></div>
                 </div>
+                <div id="ai-context" aria-live="polite">
+                    <div class="context-title">AI 对你的理解</div>
+                    <div id="context-chips"></div>
+                    <div id="ai-interpretation"></div>
+                </div>
+                <div id="route-summary"></div>
                 <ul id="route-list">
-                    <li>等待定位...</li>
+                    <li>告诉小徐你想从哪里出发、想怎么逛</li>
                 </ul>
             </div>
         </div>
@@ -524,12 +704,17 @@
             <div id="chat-messages">
                 <div class="msg assistant">
                     <div class="msg-avatar">徐</div>
-                    <div class="bubble">你好呀！我是你的AI伴游导游"小徐"🎒 今天带你漫步徐汇区，感受海派文化的魅力！有什么想了解的，随时问我~</div>
+                    <div class="bubble">你好，我是小徐。告诉我从哪里出发、想逛多久、喜欢什么，我会一边理解，一边替你操作地图。</div>
+                </div>
+                <div class="quick-prompts" aria-label="示例需求">
+                    <button class="quick-prompt" type="button">从上海图书馆出发，两小时看老洋房，最后喝咖啡</button>
+                    <button class="quick-prompt" type="button">从徐家汇出发，走一条有科幻感的路线</button>
+                    <button class="quick-prompt" type="button">从衡山路出发，轻松逛花园和书店</button>
                 </div>
             </div>
             <div id="chat-input-bar">
                 <input type="text" id="chat-input" placeholder="问问小徐：这附近有什么好吃的？" autocomplete="off">
-                <button id="send-btn" onclick="sendMessage()">
+                <button id="send-btn" aria-label="发送">
                     <svg viewBox="0 0 24 24">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                     </svg>
@@ -538,534 +723,7 @@
         </div>
     </div>
 
-    <script>
-        let currentUserPoint = null; // 在 simulateGPS 中保存，供 AI 路线规划使用
-        let selectedGpsSuggestion = null;
-        let gpsDebounceTimer = null;
-        let gpsSearchSeq = 0;
-
-        // ─── 百度地图初始化 ───
-        const map = new BMapGL.Map("container");
-        map.centerAndZoom(new BMapGL.Point(121.445, 31.205), 15);
-        map.enableScrollWheelZoom(true);
-        // 暗色地图风格
-        map.setMapStyleV2({ styleId: '6b0a5e0b2bef73dabbbb2b6b5c2b0341' });
-
-        const baseRoute = [
-            { name: "武康大楼", lng: 121.446487, lat: 31.209386 },
-            { name: "百代小红楼", lng: 121.445171, lat: 31.203008 },
-            { name: "徐家汇天主堂", lng: 121.442967, lat: 31.198305 }
-        ];
-
-        const gpsInput = document.getElementById("gps-input");
-        const gpsSuggestions = document.getElementById("gps-suggestions");
-
-        function escapeHTML(str) {
-            return String(str || "").replace(/[&<>"']/g, char => ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;"
-            }[char]));
-        }
-
-        function formatPoiAddress(poi) {
-            const parts = [poi.province, poi.city, poi.address]
-                .filter(Boolean)
-                .map(part => String(part).trim())
-                .filter(Boolean);
-            return parts.length > 0 ? parts.join(" ") : "暂无详细地址";
-        }
-
-        function hideGpsSuggestions() {
-            gpsSuggestions.style.display = "none";
-            gpsSuggestions.innerHTML = "";
-        }
-
-        function showGpsSuggestionMessage(message) {
-            gpsSuggestions.innerHTML = `<div class="gps-suggestion-empty">${escapeHTML(message)}</div>`;
-            gpsSuggestions.style.display = "block";
-        }
-
-        function renderGpsSuggestions(pois) {
-            if (pois.length === 0) {
-                showGpsSuggestionMessage("没有找到匹配地点，请输入更具体的地标。");
-                return;
-            }
-
-            gpsSuggestions.innerHTML = pois.map((poi, index) => `
-                <button type="button" class="gps-suggestion" data-index="${index}">
-                    <span class="poi-name">${escapeHTML(poi.title)}</span>
-                    <span class="poi-address">${escapeHTML(formatPoiAddress(poi))}</span>
-                </button>
-            `).join("");
-            gpsSuggestions.style.display = "block";
-
-            gpsSuggestions.querySelectorAll(".gps-suggestion").forEach(button => {
-                button.addEventListener("mousedown", event => event.preventDefault());
-                button.addEventListener("click", () => {
-                    const poi = pois[Number(button.dataset.index)];
-                    confirmGpsSuggestion(poi);
-                });
-            });
-        }
-
-        function requestGpsSuggestions(keyword) {
-            const query = keyword.trim();
-            selectedGpsSuggestion = null;
-
-            if (!query) {
-                hideGpsSuggestions();
-                return;
-            }
-
-            const seq = ++gpsSearchSeq;
-            showGpsSuggestionMessage("正在搜索候选地点...");
-
-            const local = new BMapGL.LocalSearch("上海市", {
-                pageCapacity: 8,
-                onSearchComplete: function (result) {
-                    if (seq !== gpsSearchSeq) return;
-
-                    if (local.getStatus() !== BMAP_STATUS_SUCCESS || !result) {
-                        showGpsSuggestionMessage("暂时没有搜索到候选地点。");
-                        return;
-                    }
-
-                    const pois = [];
-                    const count = result.getCurrentNumPois();
-                    for (let i = 0; i < count; i++) {
-                        const poi = result.getPoi(i);
-                        if (poi && poi.title && poi.point) {
-                            pois.push(poi);
-                        }
-                    }
-                    renderGpsSuggestions(pois);
-                }
-            });
-
-            local.search(query);
-        }
-
-        function confirmGpsSuggestion(poi) {
-            if (!poi || !poi.point) return;
-
-            selectedGpsSuggestion = {
-                name: poi.title,
-                address: formatPoiAddress(poi),
-                point: poi.point
-            };
-            gpsInput.value = selectedGpsSuggestion.name;
-            hideGpsSuggestions();
-            applyUserStartPoint(
-                selectedGpsSuggestion.point,
-                selectedGpsSuggestion.name,
-                selectedGpsSuggestion.address
-            );
-        }
-
-        gpsInput.addEventListener("input", function () {
-            clearTimeout(gpsDebounceTimer);
-            gpsDebounceTimer = setTimeout(() => {
-                requestGpsSuggestions(gpsInput.value);
-            }, 300);
-        });
-
-        gpsInput.addEventListener("focus", function () {
-            if (gpsInput.value.trim() && !selectedGpsSuggestion) {
-                requestGpsSuggestions(gpsInput.value);
-            }
-        });
-
-        gpsInput.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                simulateGPS();
-            }
-            if (e.key === "Escape") {
-                hideGpsSuggestions();
-            }
-        });
-
-        document.addEventListener("click", function (e) {
-            if (!document.querySelector(".location-search").contains(e.target)) {
-                hideGpsSuggestions();
-            }
-        });
-
-        function applyUserStartPoint(point, displayName, detailAddress) {
-            currentUserPoint = point;
-
-            document.getElementById('route-list').innerHTML = "<li>路线规划中...</li>";
-            map.clearOverlays();
-
-            // 蓝色大箭头标识用户位置
-            const arrowHTML = `<div style="font-size: 44px; color: #4facfe; filter: drop-shadow(0 2px 6px rgba(79,172,254,0.6)); transform: rotate(-90deg); line-height:1;">➤</div>`;
-            const userArrow = new BMapGL.Label(arrowHTML, {
-                position: point,
-                offset: new BMapGL.Size(-22, -22)
-            });
-            userArrow.setStyle({ background: 'transparent', border: 'none' });
-            map.addOverlay(userArrow);
-            map.panTo(point);
-
-            // 组装路线
-            const fullRoute = [
-                { name: "我的位置", lng: point.lng, lat: point.lat, isStart: true },
-                ...baseRoute
-            ];
-
-            const startLabel = detailAddress && detailAddress !== "暂无详细地址"
-                ? `${displayName}｜${detailAddress}`
-                : displayName;
-
-            // 更新面板
-            document.getElementById('route-list').innerHTML = fullRoute.map((spot, index) => {
-                if (spot.isStart) return `<li class="start-point">📍 您的位置：${escapeHTML(startLabel)}</li>`;
-                return `<li>${index}. ${escapeHTML(spot.name)}</li>`;
-            }).join('');
-
-            drawCitywalkRoute(fullRoute);
-        }
-
-        // ─── 定位：优先使用下拉二次确认的精准 POI，其次再走地址解析兜底 ───
-        function simulateGPS() {
-            const address = gpsInput.value.trim();
-            if (!address) return alert("请输入位置");
-
-            if (selectedGpsSuggestion && selectedGpsSuggestion.name === address) {
-                applyUserStartPoint(
-                    selectedGpsSuggestion.point,
-                    selectedGpsSuggestion.name,
-                    selectedGpsSuggestion.address
-                );
-                return;
-            }
-
-            hideGpsSuggestions();
-            document.getElementById('route-list').innerHTML = "<li>路线规划中...</li>";
-
-            const myGeo = new BMapGL.Geocoder();
-            myGeo.getPoint(address, function (point) {
-                if (point) {
-                    applyUserStartPoint(point, address, "");
-                } else {
-                    alert("无法解析该地址，请尝试输入具体地标");
-                    document.getElementById('route-list').innerHTML = "<li>定位失败</li>";
-                }
-            }, "上海市");
-        }
-
-        // ─── 步行路线绘制 ───
-        async function drawCitywalkRoute(routeArr) {
-            const walk = new BMapGL.WalkingRoute(map);
-            let fullPath = [];
-
-            for (let i = 0; i < routeArr.length - 1; i++) {
-                let pStart = new BMapGL.Point(routeArr[i].lng, routeArr[i].lat);
-                let pEnd = new BMapGL.Point(routeArr[i + 1].lng, routeArr[i + 1].lat);
-
-                await new Promise((resolve) => {
-                    walk.setSearchCompleteCallback(function (result) {
-                        if (walk.getStatus() === BMAP_STATUS_SUCCESS) {
-                            let plan = result.getPlan(0);
-                            fullPath = fullPath.concat(plan.getRoute(0).getPath());
-                        }
-                        resolve();
-                    });
-                    walk.search(pStart, pEnd);
-                });
-            }
-
-            // 绘制渐变路线
-            const polyline = new BMapGL.Polyline(fullPath, {
-                strokeColor: "#4facfe",
-                strokeWeight: 5,
-                strokeOpacity: 0.85
-            });
-            map.addOverlay(polyline);
-
-            // 添加景点标记
-            routeArr.forEach((spot, index) => {
-                if (spot.isStart) return;
-                let pt = new BMapGL.Point(spot.lng, spot.lat);
-                let marker = new BMapGL.Marker(pt);
-                let label = new BMapGL.Label(`${index}. ${spot.name}`, { offset: new BMapGL.Size(15, -25) });
-                label.setStyle({
-                    color: '#fff',
-                    backgroundColor: '#e74c3c',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '5px 10px',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    boxShadow: '0 2px 8px rgba(231,76,60,0.4)'
-                });
-                marker.setLabel(label);
-                map.addOverlay(marker);
-            });
-
-            map.setViewport(fullPath, { margins: [50, 50, 50, 50] });
-        }
-
-        // ─── AI 聊天逻辑 ───
-        const API_URL = "https://ai-citywalk-assistant.onrender.com/api/chat";
-        let chatHistory = []; // 记忆历史
-
-        const chatMessages = document.getElementById('chat-messages');
-        const chatInput = document.getElementById('chat-input');
-
-        // 回车发送
-        chatInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        function appendMessage(role, content) {
-            const div = document.createElement('div');
-            div.className = `msg ${role}`;
-            const avatarText = role === 'assistant' ? '徐' : '我';
-            div.innerHTML = `
-                <div class="msg-avatar">${avatarText}</div>
-                <div class="bubble">${content}</div>
-            `;
-            chatMessages.appendChild(div);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function showTyping() {
-            const div = document.createElement('div');
-            div.className = 'msg assistant typing-indicator';
-            div.id = 'typing-indicator';
-            div.innerHTML = `
-                <div class="msg-avatar">徐</div>
-                <div class="bubble">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                </div>
-            `;
-            chatMessages.appendChild(div);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function removeTyping() {
-            const el = document.getElementById('typing-indicator');
-            if (el) el.remove();
-        }
-
-        async function sendMessage() {
-            const text = chatInput.value.trim();
-            if (!text) return;
-
-            chatInput.value = '';
-            appendMessage('user', text);
-            showTyping();
-
-            try {
-                const resp = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: text,
-                        history: chatHistory
-                    })
-                });
-                const data = await resp.json();
-                removeTyping();
-
-                if (data.action === "plan_route") {
-                    appendMessage('assistant', `好的，正在为您在附近搜索包含“${data.keywords.join('、')}”的地点，并规划最佳路线...`);
-                    // 不直接把搜索动画加进大模型历史上下文，交给 searchAndPlanRoute 去补充
-                    searchAndPlanRoute(data.keywords);
-                } else {
-                    // 更新历史
-                    chatHistory.push({ role: 'user', content: text });
-                    chatHistory.push({ role: 'assistant', content: data.reply });
-                    appendMessage('assistant', data.reply);
-                }
-            } catch (err) {
-                removeTyping();
-                appendMessage('assistant', '网络连接失败，请确保后端服务已启动 (uvicorn main:app --reload)');
-            }
-        }
-
-        // ─── 工具函数：Haversine 公式计算两点间距离（米） ───
-        function haversineDistance(p1, p2) {
-            const R = 6371000;
-            const toRad = x => x * Math.PI / 180;
-            const dLat = toRad(p2.lat - p1.lat);
-            const dLng = toRad(p2.lng - p1.lng);
-            const a = Math.sin(dLat / 2) ** 2 +
-                Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) *
-                Math.sin(dLng / 2) ** 2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        }
-
-        // ─── AI 调用的百度地图周边搜索与智能路径规划 ───
-        async function searchAndPlanRoute(keywords) {
-            if (!currentUserPoint) {
-                appendMessage('assistant', '抱歉，需要您的当前位置完成定位，我才能帮您规划路线哦。');
-                return;
-            }
-
-            console.log('[searchAndPlanRoute] 开始搜索, keywords:', keywords);
-
-            // 逐个关键词搜索，合并所有 POI
-            let allPois = [];
-
-            for (const keyword of keywords) {
-                console.log('[searchAndPlanRoute] 搜索关键词:', keyword);
-                const pois = await new Promise((resolve) => {
-                    const local = new BMapGL.LocalSearch(map, {
-                        pageCapacity: 10,
-                        onSearchComplete: function (result) {
-                            let found = [];
-                            if (local.getStatus() === BMAP_STATUS_SUCCESS && result) {
-                                const num = result.getCurrentNumPois();
-                                console.log('[searchAndPlanRoute] 关键词"' + keyword + '"找到', num, '个结果');
-                                for (let i = 0; i < num; i++) {
-                                    const poi = result.getPoi(i);
-                                    if (poi && poi.point) {
-                                        found.push(poi);
-                                    }
-                                }
-                            } else {
-                                console.log('[searchAndPlanRoute] 关键词"' + keyword + '"搜索失败, status:', local.getStatus());
-                            }
-                            resolve(found);
-                        }
-                    });
-                    local.searchNearby(keyword, currentUserPoint, 4000);
-                });
-                allPois = allPois.concat(pois);
-            }
-
-            console.log('[searchAndPlanRoute] 总共找到 POI 数量:', allPois.length);
-
-            // 去重（按名称）
-            const seen = new Set();
-            allPois = allPois.filter(poi => {
-                if (seen.has(poi.title)) return false;
-                seen.add(poi.title);
-                return true;
-            });
-
-            if (allPois.length === 0) {
-                appendMessage('assistant', '抱歉呀，我没有在这附近找到相关的地点，您可以换个说法或别的关键词试试嘛？');
-                return;
-            }
-
-            // ─── AI 二次过滤：用小模型筛掉不符合用户意图的地点 ───
-            console.log('[searchAndPlanRoute] 开始 AI 过滤, POI 数量:', allPois.length);
-            try {
-                const poiNames = allPois.map(p => p.title);
-                const recentHistory = chatHistory.slice(-10);
-                const filterResp = await fetch('https://ai-citywalk-assistant.onrender.com/api/filter_pois', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        poi_names: poiNames,
-                        user_message: keywords.join(' '),
-                        history: recentHistory
-                    })
-                });
-                const filterData = await filterResp.json();
-                if (filterData.filtered_names && filterData.filtered_names.length > 0) {
-                    const keepSet = new Set(filterData.filtered_names);
-                    allPois = allPois.filter(p => keepSet.has(p.title));
-                    console.log('[searchAndPlanRoute] AI 过滤后保留 POI 数量:', allPois.length, '→', filterData.filtered_names);
-                }
-            } catch (filterErr) {
-                console.warn('[searchAndPlanRoute] AI 过滤失败，使用原始列表:', filterErr);
-            }
-
-            if (allPois.length === 0) {
-                appendMessage('assistant', '抱歉呀，AI 筛选后没有发现特别适合的地点，您可以换个说法试试嘛？');
-                return;
-            }
-
-            // 贪心算法规划路线 (最大 4000 米)
-            let currentPt = { lat: currentUserPoint.lat, lng: currentUserPoint.lng };
-            const maxDist = 4000;
-            let currentDist = 0;
-            let plannedRoute = [{ name: "我的位置", lng: currentPt.lng, lat: currentPt.lat, isStart: true }];
-            let remainingPois = [...allPois];
-
-            while (remainingPois.length > 0) {
-                let nearestIdx = -1;
-                let minDist = Infinity;
-
-                for (let i = 0; i < remainingPois.length; i++) {
-                    const d = haversineDistance(currentPt, remainingPois[i].point);
-                    if (d < minDist) {
-                        minDist = d;
-                        nearestIdx = i;
-                    }
-                }
-
-                if (nearestIdx === -1) break;
-                if (currentDist + minDist > maxDist) break;
-
-                const nextPoi = remainingPois[nearestIdx];
-                currentDist += minDist;
-                plannedRoute.push({
-                    name: nextPoi.title,
-                    lng: nextPoi.point.lng,
-                    lat: nextPoi.point.lat
-                });
-                currentPt = { lat: nextPoi.point.lat, lng: nextPoi.point.lng };
-                remainingPois.splice(nearestIdx, 1);
-
-                if (plannedRoute.length >= 6) break; // 最多途经 5 个景点
-            }
-
-            console.log('[searchAndPlanRoute] 规划路线包含', plannedRoute.length, '个点, 总距离:', currentDist.toFixed(0), '米');
-
-            if (plannedRoute.length <= 1) {
-                appendMessage('assistant', '抱歉呀，虽然找到了相关地点，但它们离这里太远了（超过4km），请换个近一点的搜寻意向吧~');
-                return;
-            }
-
-            // 更新面板
-            document.getElementById('route-list').innerHTML = plannedRoute.map((spot, index) => {
-                if (spot.isStart) return `<li class="start-point">📍 您的位置</li>`;
-                return `<li>${index}. ${spot.name}</li>`;
-            }).join('');
-
-            // 清除旧覆盖物并重绘蓝箭头
-            map.clearOverlays();
-            const arrowHTML = `<div style="font-size: 44px; color: #4facfe; filter: drop-shadow(0 2px 6px rgba(79,172,254,0.6)); transform: rotate(-90deg); line-height:1;">➤</div>`;
-            const userArrow = new BMapGL.Label(arrowHTML, {
-                position: currentUserPoint,
-                offset: new BMapGL.Size(-22, -22)
-            });
-            userArrow.setStyle({ background: 'transparent', border: 'none' });
-            map.addOverlay(userArrow);
-
-            // 画步行路线
-            drawCitywalkRoute(plannedRoute);
-
-            // 聊天框播报
-            let reportText = `已为您成功规划！总行程约 ${(currentDist / 1000).toFixed(1)} km。途经地点有：<br>`;
-            for (let i = 1; i < plannedRoute.length; i++) {
-                reportText += `${i}. ${plannedRoute[i].name}<br>`;
-            }
-
-            // 追加进大模型历史
-            const userKeywords = keywords.join("、");
-            chatHistory.push({ role: 'user', content: `我们要去包含${userKeywords}的地方` });
-            chatHistory.push({ role: 'assistant', content: reportText.replace(/<br>/g, "\n") });
-
-            appendMessage('assistant', reportText);
-        }
-
-        // ─── 页面加载时自动定位 ───
-        window.onload = simulateGPS;
-    </script>
+    <script src="/app.js"></script>
 </body>
 
 </html>
