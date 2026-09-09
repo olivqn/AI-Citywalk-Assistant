@@ -11,6 +11,49 @@ const routeCore = require("../route-core.js");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 
+test("production uses only the new interpretation endpoint and no raw-message route override", () => {
+    assert.doesNotMatch(source, /requestJson\("\/api\/chat"/);
+    assert.doesNotMatch(source, /\.test\(originalMessage\)|\.test\(text\)|routeTargetIndex/);
+});
+
+test("module unavailable preserves route and conditions, and next turn can connect again", async () => {
+    const { app } = createRouteApp([planPayload(), { status: "unavailable", source: "unavailable", failure_reason: "model_timeout",
+        action: null, proposal: null, trip_state: {}, comparison_baseline: {} }, modifyPayload("change_end", { value: null }, { end: null })]);
+    await sendText(app, "规划路线");
+    const before = appliedView(app);
+    await sendText(app, "长一点");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /本轮没有修改路线或条件/);
+    assert.equal(app.input.value, "长一点");
+    assert.equal(app.status.textContent, "本轮 AI 未完成");
+    await sendText(app, "取消固定终点");
+    assert.equal(app.status.textContent, "AI 已回复");
+});
+
+test("clarification never executes a model operation or commits its contradictory state", async () => {
+    const { app } = createRouteApp([planPayload(), { status: "needs_clarification", source: "model", action: null,
+        proposal: { intent: "modify_route", modification: { operation: "remove_stop", target: "一号咖啡馆" }, clarification: "数量条件冲突" },
+        trip_state: { min_stops: 5, max_stops: 3 }, comparison_baseline: {} }]);
+    await sendText(app, "规划路线");
+    const before = appliedView(app);
+    await sendText(app, "至少五个最多三个");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /数量条件冲突/);
+});
+
+test("full app enforces min stop count and transmits actual current route, not failed state", async () => {
+    const { app } = createRouteApp([planPayload(), modifyPayload("adjust_constraints", {}, { min_stops: 5 }),
+        { action: "chat", source: "model", reply: "原路线保留" }]);
+    await sendText(app, "规划路线");
+    const before = appliedView(app);
+    await sendText(app, "至少五站");
+    assert.deepEqual(appliedView(app), before);
+    await sendText(app, "现在呢");
+    assert.equal(app.requests[2].body.current_route.stop_count, 2);
+    assert.equal(app.requests[2].body.current_route.total_distance_meters, 400);
+    assert.equal(app.requests[2].body.trip_state.min_stops, undefined);
+});
+
 class Element {
     constructor(tagName = "div") {
         this.tagName = tagName;
@@ -113,15 +156,27 @@ function createApp({ chat = () => response({ reply: "你好，想从哪里开始
     };
     const requests = [];
     const fetch = async (url, options = {}) => {
-        if (url.endsWith("/api/health")) return response({ ai_configured: true });
+        if (url.endsWith("/api/health")) return response({ ai_configured: true, intent_endpoint: "/api/intent" });
         if (url.includes("/api/places/search?")) return typeof catalog === "function" ? catalog(url) : response({ places: catalog });
         if (url.endsWith("/api/filter_pois")) return response({
             source: "model", filtered_names: filter ? filter(JSON.parse(options.body).poi_names) : JSON.parse(options.body).poi_names,
             ...filterMetadata
         });
-        assert.ok(url.endsWith("/api/chat"), `Unexpected endpoint: ${url}`);
+        assert.ok(url.endsWith("/api/intent"), `Unexpected endpoint: ${url}`);
         requests.push({ url, options, body: JSON.parse(options.body) });
-        return chat(url, options, requests.length);
+        const reply = await chat(url, options, requests.length);
+        if (!reply.ok) return reply;
+        const payload = await reply.json();
+        if (payload.status) return response(payload);
+        // Legacy test fixture shorthand -> new module envelope. This adapter is
+        // test-only; production never interprets raw messages or legacy output.
+        const body = JSON.parse(options.body);
+        const state = { ...body.trip_state, ...payload.trip_state };
+        for (const key of payload.clear_fields || []) state[key] = Array.isArray(state[key]) ? [] : null;
+        const relative_goals = payload.relative_goals || (payload.modification?.operation === "extend" ? { distance: "increase" } : {});
+        return response({ status: "ready", source: payload.source, recovered: payload.recovered,
+            proposal: { ...payload, relative_goals }, trip_state: state, comparison_baseline: body.current_route,
+            action: ["plan_route", "modify_route"].includes(payload.action) ? payload.action : null });
     };
     // Mirror initial HTML attributes; mobile visibility is controlled by these
     // attributes, while browser smoke tests cover actual CSS and map geometry.
@@ -253,7 +308,7 @@ test("a timed-out request restores input and allows the next send", async () => 
     app.input.value = "请帮我规划";
     app.send.dispatch("click");
     assert.equal(app.send.getAttribute("aria-busy"), "true");
-    app.fireTimeout(25000);
+    app.fireTimeout(65000);
     await flush();
     assert.equal(app.input.value, "请帮我规划");
     assert.match(app.messages.textContent, /等待超时/);
@@ -293,7 +348,7 @@ test("failure does not overwrite a new draft typed while waiting", async () => {
     app.input.value = "这是我的新草稿";
     app.input.dispatch("keydown", { key: "Enter" });
     assert.equal(app.requests.length, 1, "busy Enter does not submit or cancel a second request");
-    app.fireTimeout(25000);
+    app.fireTimeout(65000);
     await flush();
     assert.equal(app.input.value, "这是我的新草稿");
     assertReady(app);
@@ -332,7 +387,7 @@ test("opening the HTML directly still targets the local backend", async () => {
     app.input.value = "你好";
     app.send.dispatch("click");
     await flush();
-    assert.equal(app.requests[0].url, "http://127.0.0.1:8000/api/chat");
+    assert.equal(app.requests[0].url, "http://127.0.0.1:8000/api/intent");
     assertReady(app);
 });
 
@@ -458,8 +513,10 @@ const modifyPayload = (operation, options = {}, state = {}) => ({
 
 function createRouteApp(payloads, options = {}) {
     const { sdk, control, pois } = createMapSdk();
+    const fixtureCommands = { "撤销上一步": modifyPayload("undo"), "恢复第一次路线": modifyPayload("restore_initial"),
+        "恢复到最初路线": modifyPayload("restore_initial") };
     const app = createApp({ ...options, mapSdk: sdk, chat: (_url, _options, count) => response(payloads[count - 1]
-        || { intent: "chat", source: "model", reply: "当前路线不变。" }) });
+        || fixtureCommands[JSON.parse(_options.body).message] || { intent: "chat", source: "model", reply: "当前路线不变。" }) });
     app.window.citywalkMapReady();
     return { app, control, pois };
 }
@@ -482,7 +539,7 @@ test("extend adds a new stop, proves increased walking distance, and undo restor
     control.nearby.push(pois["附近咖啡馆"]);
     await sendText(app, "长一点");
     assert.match(app.route.textContent, /1. 一号咖啡馆.*2. 二号咖啡馆.*3. 附近咖啡馆/);
-    assert.match(app.messages.textContent, /从 400 米延长到 600 米（增加 200 米）/);
+    assert.match(app.messages.textContent, /400 → 600 米/);
     assert.match(app.summary.textContent, /步行 600 米/);
     await sendText(app, "撤销上一步");
     assert.deepEqual(appliedView(app), before);
@@ -504,7 +561,7 @@ test("extend cannot silently repeat old stops or pretend the same route is longe
     const before = appliedView(app);
     await sendText(app, "长一点");
     assert.deepEqual(appliedView(app), before);
-    assert.match(app.messages.textContent, /未找到合适的新地点/);
+    assert.match(app.messages.textContent, /未找到可行路线/);
     assert.doesNotMatch(app.messages.textContent, /延长到/);
     assertReady(app);
 });
@@ -516,7 +573,7 @@ test("extend respects an existing walking cap without publishing failed changes"
     control.nearby.push(pois["附近咖啡馆"]);
     await sendText(app, "长一点");
     assert.deepEqual(appliedView(app), before);
-    assert.match(app.messages.textContent, /超过你要求的 400 米上限/);
+    assert.match(app.messages.textContent, /不满足你要求的不超过 400 米|未满足增加/);
     assert.doesNotMatch(app.messages.textContent, /延长到/);
 });
 
@@ -554,7 +611,7 @@ test("full app follows an exact reorder and undo restores the exact prior route,
     assert.notEqual(app.route.textContent, before.route);
     await sendText(app, "撤销上一步");
     assert.deepEqual(appliedView(app), before);
-    assert.equal(app.requests.length, 2, "an explicit undo is local and does not call the model");
+    assert.equal(app.requests.length, 3, "undo interpretation also goes through the AI module");
     assert.match(app.messages.textContent, /已撤销上一步/);
     assertReady(app);
 });
@@ -745,7 +802,7 @@ test("changing a normal theme does not inherit an automatically hardened old cat
 test("set_stops keeps a fixed end marker so a later addition is inserted before it", async () => {
     const { app, control, pois } = createRouteApp([planPayload({ end: "二号咖啡馆" }),
         modifyPayload("set_stops", { places: ["一号咖啡馆", "二号咖啡馆"] }),
-        modifyPayload("add_stop", { value: "咖啡馆" })]);
+        modifyPayload("add_stop", { value: "咖啡馆", value_kind: "category" })]);
     await sendText(app, "在二号咖啡馆结束");
     await sendText(app, "只保留一号咖啡馆和二号咖啡馆");
     control.nearby = [pois["附近咖啡馆"]];
@@ -755,7 +812,7 @@ test("set_stops keeps a fixed end marker so a later addition is inserted before 
 });
 
 test("a first plan with only named places does not add optional nearby stops", async () => {
-    const { app, control } = createRouteApp([planPayload({ theme: [], required_places: ["美罗城", "港汇恒隆广场"] })]);
+    const { app, control } = createRouteApp([{ ...planPayload({ theme: [], required_places: ["美罗城", "港汇恒隆广场"] }), selection_mode: "only_specified" }]);
     await sendText(app, "只去美罗城和港汇恒隆广场");
     assert.match(app.route.textContent, /1. 美罗城.*2. 港汇恒隆广场/);
     assert.equal(app.route.children.length, 3);

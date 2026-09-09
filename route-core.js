@@ -149,10 +149,14 @@
         if (finiteNumber(cap) && cap >= 0) {
             if (measured.verified !== true || !finiteNumber(measured.distance) || measured.distance < 0) {
                 violations.push(`尚未取得可核验的步行距离，不能确认满足 ${cap} 米上限。`);
-            } else if (measured.distance > cap) {
-                violations.push(`步行约 ${Math.ceil(measured.distance)} 米，超过你要求的 ${cap} 米上限。`);
+            } else if (measured.distance > cap || (requested.max_walk_inclusive === false && measured.distance === cap)) {
+                violations.push(`步行约 ${Math.ceil(measured.distance)} 米，不满足你要求的${requested.max_walk_inclusive === false ? "小于" : "不超过"} ${cap} 米。`);
             }
         }
+        if (Number.isInteger(requested.min_stops) && stops.length < requested.min_stops)
+            violations.push(`需要至少 ${requested.min_stops} 个游览点，当前只有 ${stops.length} 个（不含起点）。`);
+        if (Number.isInteger(requested.max_stops) && stops.length > requested.max_stops)
+            violations.push(`需要最多 ${requested.max_stops} 个游览点，当前有 ${stops.length} 个（不含起点）。`);
         for (const name of list(requested.required_places)) {
             if (!stops.some(poi => samePlace(placeName(poi), name))) violations.push(`未包含必去地点“${name}”。`);
         }
@@ -196,6 +200,96 @@
         return [route[0], ...selected, ...stops.filter((_, index) => !used.has(index))];
     }
 
+    function validateGoals(route, metrics, goals = {}, baseline = {}) {
+        const errors = [];
+        for (const [key, actual, prior, label] of [
+            ["distance", metrics?.distance, baseline.total_distance_meters, "总步行距离"],
+            ["stop_count", route.length - 1, baseline.stop_count, "游览点数量"]
+        ]) {
+            const direction = goals[key];
+            if (!direction) continue;
+            if (!finiteNumber(prior) || !finiteNumber(actual) || (key === "distance" && metrics?.verified !== true))
+                errors.push(`缺少可核验的${label}比较基准。`);
+            else if (!(direction === "increase" ? actual > prior : direction === "decrease" ? actual < prior : actual === prior))
+                errors.push(`${label}未满足${direction === "increase" ? "增加" : direction === "decrease" ? "减少" : "保持不变"}的要求（原 ${prior}，新 ${actual}）。`);
+        }
+        return errors;
+    }
+
+    // Bounded search, not a language parser. Distances used for final acceptance
+    // always come from measure() (map walking routes), never the ranking heuristic.
+    async function fitRoute({ route, candidates = [], state = {}, goals = {}, baseline = {}, measure,
+        rank = () => 0, maxEvaluations = 40 }) {
+        const origin = route[0];
+        const count = route.length - 1;
+        let lower = Math.max(1, state.min_stops ?? 1);
+        let upper = Math.min(12, state.max_stops ?? 12);
+        if (goals.stop_count === "increase") lower = Math.max(lower, baseline.stop_count + 1);
+        if (goals.stop_count === "decrease") upper = Math.min(upper, baseline.stop_count - 1);
+        if (goals.stop_count === "unchanged") lower = upper = baseline.stop_count;
+        if (lower > upper || lower > 12) throw new Error("当前数量条件没有可执行范围；Demo 单条路线最多支持 12 站。");
+        const pool = [];
+        for (const poi of [...route.slice(1), ...candidates]) {
+            if (isUsablePoi(poi) && !samePlace(poi, origin) && !pool.some(other => samePlace(other, poi))) pool.push(poi);
+        }
+        const signature = stops => stops.map(placeName).join("\u001f");
+        const ordered = stops => {
+            if (!state.end) return stops;
+            return [...stops.filter(p => !samePlace(p, state.end)), ...stops.filter(p => samePlace(p, state.end))];
+        };
+        let variants = [ordered(route.slice(1))];
+        const target = Math.min(upper, Math.max(lower, count));
+        // Grow/shrink a beam while keeping the requested fixed endpoint last.
+        for (let size = count; size !== target; size += size < target ? 1 : -1) {
+            const next = [];
+            for (const stops of variants) {
+                if (size < target) {
+                    for (const poi of pool.filter(p => !stops.some(s => samePlace(s, p))))
+                        for (let index = 0; index <= stops.length; index++) {
+                            const changed = [...stops]; changed.splice(index, 0, poi); next.push(ordered(changed));
+                        }
+                } else {
+                    for (let index = 0; index < stops.length; index++) {
+                        const poi = stops[index];
+                        if (samePlace(poi, state.end) || list(state.required_places).some(p => samePlace(p, poi))) continue;
+                        next.push(stops.filter((_, i) => i !== index));
+                    }
+                }
+            }
+            variants = [...new Map(next.map(s => [signature(s), s])).values()]
+                .sort((a, b) => rank([origin, ...a]) - rank([origin, ...b])).slice(0, 32);
+            if (!variants.length) break;
+        }
+        // Try changed order before adding/deleting places for distance-only goals.
+        const seeds = [...variants];
+        for (const stops of seeds) {
+            for (let a = 0; a < stops.length; a++) for (let b = a + 1; b < stops.length; b++) {
+                const reordered = [...stops]; [reordered[a], reordered[b]] = [reordered[b], reordered[a]];
+                variants.push(ordered(reordered));
+            }
+            if (goals.distance === "increase" && !goals.stop_count && stops.length < upper) {
+                for (const poi of pool.filter(p => !stops.some(s => samePlace(s, p)))) variants.push(ordered([...stops, poi]));
+            }
+        }
+        variants = [...new Map(variants.map(s => [signature(s), s])).values()];
+        variants.sort((a, b) => rank([origin, ...a]) - rank([origin, ...b]));
+        let lastIssue = "未找到符合所有条件的候选路线。";
+        let attempts = 0;
+        for (const stops of variants) {
+            const proposed = [origin, ...stops];
+            // Static checks prune candidates before spending map requests.
+            if (validateRoute(proposed, { ...state, max_walk_meters: null, duration_minutes: null }, {}).length) continue;
+            if (++attempts > maxEvaluations) break;
+            let metrics;
+            try { metrics = await measure(proposed); }
+            catch (error) { if (error.name === "AbortError") throw error; lastIssue = error.message; continue; }
+            const issues = [...validateRoute(proposed, state, metrics), ...validateGoals(proposed, metrics, goals, baseline)];
+            if (!issues.length) return { route: proposed, metrics };
+            lastIssue = issues[0];
+        }
+        throw new Error(`在本次有限候选搜索中未找到可行路线：${lastIssue}原路线与条件不变，可放宽条件再试。`);
+    }
+
     return Object.freeze({ normalizeName, samePlace, inDemoArea, isUsablePoi, categoryMatches, matchesCatalogPlace,
-        validateRoute, orderStops, estimatedVisitMinutes });
+        validateRoute, validateGoals, fitRoute, orderStops, estimatedVisitMinutes });
 });

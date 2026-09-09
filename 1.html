@@ -713,7 +713,10 @@
                 min-height: 0;
             }
             #app[data-mobile-view="map"] #chat-panel { display: none; }
-            #app[data-mobile-view="chat"] #map-section { display: none; }
+            /* Keep the map's real dimensions while chatting; display:none makes
+               the SDK fit a zero-sized viewport and clips the route on return. */
+            #app[data-mobile-view="chat"] #map-section { visibility: hidden; pointer-events: none; }
+            #app[data-mobile-view="chat"] #chat-panel { position: absolute; inset: 96px 0 0; width: 100%; }
             #chat-header { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
             #chat-header #service-status { margin-left: auto; font-size: 11px; }
             #chat-input-bar { padding: 8px 12px max(8px, env(safe-area-inset-bottom)); }

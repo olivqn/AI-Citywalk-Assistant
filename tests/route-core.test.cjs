@@ -6,6 +6,61 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../route-core.js");
+
+test("strict distance and stop-count boundaries are final acceptance conditions", () => {
+    const r = route("美罗城", "港汇恒隆广场", "武康大楼", "安福路");
+    const m = { verified: true, distance: 800 };
+    assert.equal(core.validateRoute(r, { max_walk_meters: 800, max_walk_inclusive: false }, m).length, 1);
+    assert.deepEqual(core.validateRoute(r, { max_walk_meters: 800, max_walk_inclusive: true }, m), []);
+    assert.equal(core.validateRoute(r, { min_stops: 5 }, m).length, 1);
+    assert.equal(core.validateRoute(r, { max_stops: 3 }, m).length, 1);
+    assert.deepEqual(core.validateRoute(r, { min_stops: 4, max_stops: 4 }, m), []);
+});
+
+test("relative distance and count are checked independently against committed baseline", () => {
+    const r = route("美罗城", "港汇恒隆广场");
+    const b = { stop_count: 3, total_distance_meters: 900 };
+    assert.deepEqual(core.validateGoals(r, { verified: true, distance: 900 }, { stop_count: "decrease", distance: "unchanged" }, b), []);
+    assert.equal(core.validateGoals(r, { verified: true, distance: 800 }, { stop_count: "unchanged", distance: "decrease" }, b).length, 1);
+    assert.equal(core.validateGoals(r, { verified: false, distance: 800 }, { distance: "decrease" }, b).length, 1);
+    assert.equal(core.validateGoals(r, { verified: true, distance: 900 }, { distance: "decrease" }, b).length, 1);
+});
+
+test("solver adds enough stops for min=5, not just one; origin never counts", async () => {
+    const initial = route("美罗城", "港汇恒隆广场", "武康大楼");
+    const candidates = route("安福路", "罗密欧阳台").slice(1);
+    const result = await core.fitRoute({ route: initial, candidates, state: { min_stops: 5 },
+        measure: async r => ({ verified: true, distance: (r.length - 1) * 100, walkingMinutes: 5 }) });
+    assert.equal(result.route.length - 1, 5);
+    assert.equal(initial.length - 1, 3, "input stays immutable");
+});
+
+test("solver shortens through measured reordering without deleting any stop", async () => {
+    const initial = route("美罗城", "港汇恒隆广场", "武康大楼");
+    const result = await core.fitRoute({ route: initial, goals: { distance: "decrease", stop_count: "unchanged" },
+        baseline: { total_distance_meters: 900, stop_count: 3 },
+        measure: async r => ({ verified: true, distance: r[1].name === "港汇恒隆广场" ? 700 : 900 }) });
+    assert.equal(result.metrics.distance, 700);
+    assert.deepEqual(result.route.slice(1).map(p => p.name).sort(), initial.slice(1).map(p => p.name).sort());
+});
+
+test("solver respects count decrease, protected endpoint and independent unchanged distance", async () => {
+    const initial = route("美罗城", "港汇恒隆广场", "武康大楼");
+    const result = await core.fitRoute({ route: initial, state: { end: "武康大楼", required_places: ["港汇恒隆广场"] },
+        goals: { stop_count: "decrease", distance: "unchanged" }, baseline: { stop_count: 3, total_distance_meters: 500 },
+        measure: async () => ({ verified: true, distance: 500 }) });
+    assert.deepEqual(result.route.slice(1).map(p => p.name), ["港汇恒隆广场", "武康大楼"]);
+});
+
+test("unavailable or infeasible map results cannot be accepted or mutate the input", async () => {
+    const initial = route("美罗城", "港汇恒隆广场");
+    const before = JSON.stringify(initial);
+    await assert.rejects(core.fitRoute({ route: initial, state: { min_stops: 5 },
+        measure: async () => ({ verified: true, distance: 1 }) }), /未找到/);
+    await assert.rejects(core.fitRoute({ route: initial, state: { max_walk_meters: 800, max_walk_inclusive: false },
+        measure: async () => ({ verified: true, distance: 800 }) }), /未找到/);
+    assert.equal(JSON.stringify(initial), before);
+});
 const point = { lng: 121.44, lat: 31.20 };
 const stop = (name, extra = {}) => ({ name, point: { ...point }, ...extra });
 const start = () => stop("上海图书馆", { isStart: true });

@@ -38,25 +38,27 @@
     let activeProgress = null;
     let hasInteraction = false;
     let turnChatResponse = null;
+    let executionIntent = null;
     const serviceStatus = document.getElementById("service-status");
 
     function failureDescription(data) {
         const descriptions = {
             model_timeout: "本次 AI 回复超时", model_network_error: "本次 AI 请求遇到网络波动",
+            empty_model_response: "本次 AI 服务返回了空回复",
             invalid_model_response: "本次 AI 返回格式异常", model_unavailable: "本次 AI 服务响应异常",
             model_rate_limited: "AI 请求暂时过多", missing_api_key: "尚未配置 AI 密钥",
             model_auth_error: "AI 密钥验证失败", model_quota_exceeded: "AI 账户额度不足",
             model_access_denied: "AI 访问被拒绝", model_not_found: "AI 模型配置有误",
             model_invalid_request: "AI 请求配置有误"
         };
-        return descriptions[data?.fallback_reason] || "本次 AI 请求未完成";
+        return descriptions[data?.fallback_reason || data?.failure_reason] || "本次 AI 请求未完成";
     }
 
     function responseStatus(data, stage = "chat") {
         if (stage === "chat") turnChatResponse = data;
         const chat = turnChatResponse || data;
         const local = chat.source === "rule_based" || chat.fallback_reason === "rule_based";
-        let label = local ? "本轮本地处理" : chat.source === "model" ? "AI 已回复" : "本轮备用回复";
+        let label = local ? "本轮本地处理" : chat.source === "model" ? "AI 已回复" : chat.source === "unavailable" ? "本轮 AI 未完成" : "本轮备用回复";
         let detail = local ? "这条明确指令由本地规则处理，没有发生 AI 断联。"
             : chat.source === "model" ? (chat.recovered ? "本次自动重试后已收到 AI 回复。" : "本次已收到 AI 回复。")
             : `${failureDescription(chat)}；下一条消息仍会重新尝试 AI。`;
@@ -103,6 +105,11 @@
     async function checkService() {
         try {
             const health = await requestJson("/api/health", {}, 4000);
+            if (health.intent_endpoint !== "/api/intent" || health.restart_required) {
+                serviceStatus.textContent = "服务需要重启";
+                appendMessage("assistant", "当前服务没有加载最新代码。请重新运行“启动 Demo.cmd”并重启服务，再刷新本页。", "error");
+                return;
+            }
             if (!hasInteraction) serviceStatus.textContent = health.ai_configured ? "服务已就绪" : "AI 未配置";
         } catch (_) {
             if (hasInteraction) return;
@@ -312,7 +319,9 @@
         if (tripState.theme?.length) chips.push(`主题 · ${tripState.theme.join(" / ")}`);
         if (tripState.pace) chips.push(`节奏 · ${PACE_LABELS[tripState.pace] || tripState.pace}`);
         if (tripState.end) chips.push(`终点 · ${tripState.end}`);
-        if (tripState.max_walk_meters) chips.push(`步行上限 · ${tripState.max_walk_meters} 米`);
+        if (tripState.max_walk_meters) chips.push(`步行 · ${tripState.max_walk_inclusive === false ? "<" : "≤"} ${tripState.max_walk_meters} 米`);
+        if (tripState.min_stops != null) chips.push(`景点 · 至少 ${tripState.min_stops} 处`);
+        if (tripState.max_stops != null) chips.push(`景点 · 最多 ${tripState.max_stops} 处`);
         if (tripState.required_categories?.length) chips.push(`必须有 · ${tripState.required_categories.join(" / ")}`);
         if (tripState.excluded_places?.length) chips.push(`不去 · ${tripState.excluded_places.join(" / ")}`);
 
@@ -698,6 +707,7 @@
         let maxStops = duration <= 60 ? 3 : duration <= 120 ? 4 : 5;
         if (tripState.pace === "relaxed") maxStops = Math.max(2, maxStops - 1);
         if (tripState.pace === "packed") maxStops = Math.min(5, maxStops + 1);
+        maxStops = Math.min(12, tripState.max_stops ?? 12, Math.max(maxStops, tripState.min_stops ?? 1));
         const maxDistance = Math.min(tripState.max_walk_meters || Infinity, duration * 45);
 
         const chosen = [];
@@ -808,7 +818,8 @@
 
         route.slice(1).forEach((stop, index) => {
             const marker = new BMapGL.Marker(stop.point);
-            const label = new BMapGL.Label(`${index + 1}. ${stop.name}`, { offset: new BMapGL.Size(15, -25) });
+            const label = new BMapGL.Label(isMobileLayout() ? `${index + 1}` : `${index + 1}. ${stop.name}`,
+                { offset: new BMapGL.Size(15, -25) });
             label.setStyle({
                 color: "#fff",
                 backgroundColor: "#e74c3c",
@@ -823,7 +834,12 @@
         });
 
         const viewportPoints = fullPath.length ? fullPath : route.map(item => item.point);
-        if (viewportPoints.length) map.setViewport(viewportPoints, { margins: [55, 55, 55, 55] });
+        // The mobile map stays laid out beneath the chat view. Fit only after
+        // layout, with space for the floating route header and bottom CTA.
+        if (viewportPoints.length) {
+            const top = isMobileLayout() ? Math.min(280, (routePanel.getBoundingClientRect?.().height || 66) + 45) : 55;
+            map.setViewport(viewportPoints, { margins: [top, 80, isMobileLayout() ? 110 : 55, 55], delay: 0 });
+        }
     }
 
     function protectedStop(stop, route = currentRoute) {
@@ -833,19 +849,24 @@
                 && !route.some(other => !other.isStart && !core.samePlace(other.name, stop.name) && core.categoryMatches(other, category)));
     }
 
+    function routeViolations(route, metrics) {
+        return [...core.validateRoute(route, tripState, metrics),
+            ...core.validateGoals(route, metrics, executionIntent?.proposal?.relative_goals || {}, executionIntent?.comparison_baseline || {})];
+    }
+
     async function publishRoute(proposed, allowTrim = false) {
         let route = proposed.map((stop, index) => ({ ...stop,
             isEnd: Boolean(index > 0 && tripState.end && core.samePlace(stop.name, tripState.end)) }));
         if (route.length <= 1) throw new RouteError("没有找到满足条件的游览地点，可以换主题或放宽距离");
         let metrics = await measureRoute(route);
-        let violations = core.validateRoute(route, tripState, metrics);
+        let violations = routeViolations(route, metrics);
         while (allowTrim && violations.length && route.length > 2) {
             const removable = route.map((stop, index) => ({ stop, index }))
                 .filter(({ stop, index }) => index > 0 && !protectedStop(stop, route));
             if (!removable.length) break;
             route.splice(removable.at(-1).index, 1);
             metrics = await measureRoute(route);
-            violations = core.validateRoute(route, tripState, metrics);
+            violations = routeViolations(route, metrics);
         }
         if (violations.length) throw new RouteError(violations.join("；"));
         if (activeRequest?.signal.aborted) throw new DOMException("已取消", "AbortError");
@@ -916,7 +937,7 @@
         route.slice(1).forEach((stop, index) => {
             const line = document.createElement("div");
             line.style.marginTop = "7px";
-            line.textContent = `${index + 1}. ${stop.name}：${stop.reason}`;
+            line.textContent = `${index + 1}. ${stop.name}：${stop.reason || "来自本次地图检索，并已核对步行连接。"}`;
             bubble.appendChild(line);
             if (stop.catalog?.sources?.length) {
                 const source = stop.catalog.sources.find(item => /^https:\/\//.test(item.url));
@@ -950,10 +971,9 @@
 
     async function planRoute(keywords, originalMessage, interpretation = "") {
         if (!(await ensureStartPoint())) return false;
-        if (/(只保留|仅保留|只去)/.test(originalMessage) && tripState.required_places?.length) {
+        if (executionIntent?.proposal?.selection_mode === "only_specified" && tripState.required_places?.length) {
             const exactRoute = [{ name: currentStartName, point: currentUserPoint, isStart: true }];
             for (const name of tripState.required_places) exactRoute.push(await resolveNamedStop(name));
-            tripState.theme = [];
             if (tripState.end) await addRouteEnd(exactRoute, tripState.end);
             await publishRoute(exactRoute, false);
             appendRouteResult(currentRoute, currentRouteDistance, "只包含你指定的地点，没有额外加站。");
@@ -1012,24 +1032,6 @@
         return true;
     }
 
-    function chineseNumberToInt(value) {
-        const mapNumbers = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
-        return /^\d+$/.test(value) ? Number(value) : mapNumbers[value] || null;
-    }
-
-    function routeTargetIndex(target, originalMessage) {
-        const text = `${target || ""} ${originalMessage || ""}`;
-        const namedIndex = currentRoute.findIndex((stop, index) => index > 0 && (
-            text.includes(stop.name) || (target && stop.name.includes(target))
-        ));
-        if (namedIndex > 0) return namedIndex;
-        const match = text.match(/第([一二两三四五六七八九\d]+)站/);
-        const parsed = match ? chineseNumberToInt(match[1]) : null;
-        if (parsed && parsed < currentRoute.length) return parsed;
-        return -1;
-    }
-
-
     async function applyRouteModification(modification, keywords, originalMessage) {
         const operation = modification?.operation;
         if (operation === "undo" || operation === "restore_initial") {
@@ -1043,7 +1045,9 @@
             return true;
         }
         if (currentRoute.length <= 1) throw new RouteError("现在还没有可修改的路线，请先告诉我起点、时长和主题");
-        if (operation === "extend") return extendRoute(originalMessage);
+        if (["extend", "shorten", "adjust_constraints"].includes(operation)
+            || (operation === "reorder" && !modification.places?.length && executionIntent?.proposal?.relative_goals?.distance))
+            return adjustRouteConstraints(keywords, originalMessage);
         if (["replan", "change_theme", "change_start"].includes(operation)) {
             if (operation === "change_start" && modification.value) tripState.start = modification.value;
             return planRoute(keywords?.length ? keywords : tripState.theme, originalMessage);
@@ -1074,18 +1078,10 @@
             try { proposed = core.orderStops(proposed, modification.places); }
             catch (error) { throw new RouteError(error.message); }
             description = "已按你指定的顺序排列，其他地点没有删减。";
-        } else if (operation === "shorten") {
-            if (tripState.max_walk_meters) {
-                return planRoute(keywords?.length ? keywords : tripState.theme, originalMessage);
-            }
-            const index = proposed.map((stop, index) => ({ stop, index })).filter(({ stop, index }) => index > 0 && !protectedStop(stop)).at(-1)?.index;
-            if (!index || proposed.length <= 2) throw new RouteError("已没有可直接删减的站点，请指定更近的地点或距离上限");
-            proposed.splice(index, 1);
-            description = "已删减一站，并保留必去地点和固定终点。";
         } else if (operation === "remove_stop") {
             const targets = modification.places?.length ? modification.places : [modification.target];
             for (const target of targets) {
-                const index = routeTargetIndex(target, target || originalMessage);
+                const index = currentRoute.findIndex(stop => !stop.isStart && core.samePlace(stop.name, target));
                 const actual = proposed.findIndex(stop => !stop.isStart && core.samePlace(stop.name, currentRoute[index]?.name));
                 if (actual < 1) throw new RouteError("没能确认要删除哪一站，请使用地点名或第几站");
                 const [removed] = proposed.splice(actual, 1);
@@ -1094,11 +1090,11 @@
             }
             description = "已删除指定地点，其他站点保持不变。";
         } else if (operation === "replace_stop" || operation === "add_stop") {
-            const index = routeTargetIndex(modification.target, originalMessage);
+            const index = currentRoute.findIndex(stop => !stop.isStart && core.samePlace(stop.name, modification.target));
             if (operation === "replace_stop" && index < 1) throw new RouteError("请明确要替换哪一站");
             const query = modification.value || tripState.theme?.[0] || keywords?.[0];
             if (!query) throw new RouteError("请告诉我要加入的地点或类别");
-            const category = /^(?:(?:更?近(?:一点)?|一家|一个|安静|特色|附近)的?)*(咖啡|咖啡馆|咖啡店|书店|花园|公园|历史建筑|老洋房|现代建筑|餐厅)$/.exec(query)?.[1];
+            const category = modification.value_kind === "category" ? query : null;
             const candidates = category
                 ? await waitForMap(searchOneKeyword(category, Math.min(tripState.max_walk_meters || 3500, 3500)))
                 : [await resolveNamedStop(query)];
@@ -1118,10 +1114,6 @@
             }
             else proposed.splice(proposed.at(-1).isEnd ? proposed.length - 1 : proposed.length, 0, candidate);
             description = operation === "replace_stop" ? "已替换指定地点，其他站保留。" : "已加入新地点。";
-            if (/更近|近一点|少走/.test(originalMessage)) {
-                const metrics = await measureRoute(proposed);
-                if (metrics.distance >= currentRouteDistance) throw new RouteError("找到的替代地点并没有让路线更短，原路线保留");
-            }
         } else {
             throw new RouteError("这项修改暂时无法准确执行，请指定地点或顺序；不会擅自重做整条路线");
         }
@@ -1130,38 +1122,35 @@
         return true;
     }
 
-    async function extendRoute(originalMessage) {
-        const beforeDistance = currentRouteDistance;
-        const themes = [...new Set([...(tripState.required_categories || []), ...(tripState.theme || [])])];
-        const keywords = (themes.length ? themes : ["历史建筑", "公园"]).slice(0, 4);
-        const progress = appendPlanningProgress();
-        activeProgress = progress;
-        progress.setStage(1, "寻找原路线之外的新地点");
-        const pois = await searchPois(keywords, progress, originalMessage);
-        const candidates = (await filterPois(pois, originalMessage)).filter(poi =>
-            !currentRoute.some(stop => core.samePlace(stop.name, poi.name)));
-        const insertion = currentRoute.at(-1).isEnd ? currentRoute.length - 1 : currentRoute.length;
-        const anchor = currentRoute[insertion - 1].point;
-        candidates.sort((a, b) => Number(Boolean(b.catalog)) - Number(Boolean(a.catalog))
-            || haversineDistance(anchor, a.point) - haversineDistance(anchor, b.point));
-        let constraintReason = "";
-        for (const candidate of candidates.slice(0, 8)) {
-            progress.setStage(3, `核对新增“${candidate.name}”后的实际距离`);
-            const proposed = currentRoute.map(stop => ({ ...stop }));
-            proposed.splice(insertion, 0, { ...candidate, reason: "在原路线基础上新增的一站。" });
-            let metrics;
-            try { metrics = await measureRoute(proposed); }
-            catch (error) { if (activeRequest?.signal.aborted) throw error; continue; }
-            if (metrics.distance < beforeDistance + 50) continue;
-            const violations = core.validateRoute(proposed, tripState, metrics);
-            if (violations.length) { constraintReason = violations[0]; continue; }
-            await publishRoute(proposed, false);
-            progress.complete();
-            appendRouteResult(currentRoute, currentRouteDistance,
-                `已新增“${candidate.name}”，原有地点和顺序保留。步行从 ${Math.ceil(beforeDistance)} 米延长到 ${Math.ceil(currentRouteDistance)} 米（增加 ${Math.ceil(currentRouteDistance - beforeDistance)} 米）。`);
-            return true;
+    async function adjustRouteConstraints(keywords, originalMessage) {
+        const goals = executionIntent?.proposal?.relative_goals || {};
+        const baseline = executionIntent?.comparison_baseline || {};
+        const needsMore = (tripState.min_stops ?? 0) > currentRoute.length - 1
+            || goals.stop_count === "increase" || (goals.distance === "increase" && goals.stop_count !== "unchanged");
+        let candidates = [];
+        if (needsMore) {
+            const queries = keywords?.length ? keywords : tripState.theme?.length ? tripState.theme : ["历史建筑", "公园"];
+            const progress = appendPlanningProgress(); activeProgress = progress;
+            progress.setStage(1, "检索满足数量与距离条件的候选地点");
+            candidates = await filterPois(await searchPois(queries.slice(0, 4), progress, originalMessage), originalMessage);
         }
-        throw new RouteError(`暂时没有找到符合当前条件、且确实更长的路线。${constraintReason || "附近未找到合适的新地点。"}可以放宽时长或步行上限，再试一次`);
+        const route = currentRoute.map(stop => ({ ...stop }));
+        for (const name of tripState.required_places || []) {
+            if (!route.some(stop => core.samePlace(stop.name, name))) candidates.push(await resolveNamedStop(name));
+        }
+        try {
+            const result = await core.fitRoute({ route, candidates, state: tripState, goals, baseline,
+                measure: measureRoute,
+                rank: proposed => proposed.slice(1).reduce((sum, stop, i) => sum + haversineDistance(proposed[i].point, stop.point), 0) });
+            await publishRoute(result.route, false);
+        } catch (error) {
+            if (error.name === "AbortError") throw error;
+            throw new RouteError(error.message);
+        }
+        activeProgress?.complete();
+        appendRouteResult(currentRoute, currentRouteDistance,
+            `已按独立的数量和距离条件核验：${baseline.stop_count} → ${currentRoute.length - 1} 站，${Math.ceil(baseline.total_distance_meters)} → ${Math.ceil(currentRouteDistance)} 米。`);
+        return true;
     }
 
     function askAboutPlace(stop) {
@@ -1179,24 +1168,6 @@
         appendMessage("user", text);
         const before = captureSnapshot();
 
-        if (currentRoute.length > 1 && /^(撤销(上一步|刚才的修改)?|恢复(到)?(第一次|最初)(的)?路线)[。！!]?$/.test(text)) {
-            try {
-                await applyRouteModification({ operation: /第一次|最初/.test(text) ? "restore_initial" : "undo" }, [], text);
-                chatHistory.push({ role: "user", content: text }, { role: "assistant", content: lastActionSummary });
-                responseStatus({ source: "rule_based" });
-            } catch (error) { appendMessage("assistant", error.message, "needs-input"); }
-            setBusy(false);
-            return;
-        }
-        if (currentRoute.length > 1 && /(路线|一共|全程).*(多久|多长时间|多远|多少公里)/.test(text)) {
-            const minutes = Math.ceil(currentMetrics.walkingMinutes + core.estimatedVisitMinutes(currentRoute, tripState));
-            const reply = `当前路线共 ${currentRoute.length - 1} 站，地图步行距离 ${Math.ceil(currentRouteDistance)} 米；含停留预计 ${minutes} 分钟（不是保证耗时）。`;
-            appendMessage("assistant", reply);
-            responseStatus({ source: "rule_based" });
-            chatHistory.push({ role: "user", content: text }, { role: "assistant", content: reply });
-            return;
-        }
-
         const thinkingRow = appendMessage("assistant", "● 正在理解你的需求…");
         activeRequest = new AbortController();
         setBusy(true);
@@ -1204,19 +1175,27 @@
         serviceStatus.title = "正在处理这条消息，临时失败会自动重试一次。";
         let actionStarted = false;
         try {
-            const data = await requestJson("/api/chat", {
+            const result = await requestJson("/api/intent", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     message: text,
                     history: chatHistory.slice(-12),
                     trip_state: tripState,
-                    route_places: currentRoute.slice(1).map(stop => stop.name)
+                    current_route: {
+                        places: currentRoute.slice(1).map(stop => stop.name), stop_count: Math.max(0, currentRoute.length - 1),
+                        total_distance_meters: currentMetrics?.verified ? currentRouteDistance : null,
+                        estimated_duration_minutes: currentMetrics ? currentMetrics.walkingMinutes + core.estimatedVisitMinutes(currentRoute, tripState) : null,
+                        can_undo: routeSnapshots.length > 0, can_restore_initial: Boolean(initialSnapshot)
+                    }
                 })
-            });
+            }, 65000);
             thinkingRow.remove();
+            executionIntent = result;
+            const data = { ...(result.proposal || {}), source: result.source, recovered: result.recovered,
+                failure_reason: result.failure_reason, trip_state: result.trip_state, action: result.action };
             responseStatus(data);
-            const action = data.action || data.intent;
+            const action = result.status === "ready" ? result.action : null;
             let actionSummary;
             if (action === "plan_route" || action === "modify_route") {
                 actionStarted = true;
@@ -1244,11 +1223,30 @@
                 }
             } else {
                 // A chat reply must never overwrite an already committed route's labels.
-                if (!currentRoute.length) renderUnderstanding(data);
-                const reply = data.reply || "请告诉我起点、时长和想逛的主题。";
+                let reply = result.status === "unavailable"
+                    ? `${failureDescription(result)}，本轮没有修改路线或条件。可以点击发送重试，下一条消息也会重新连接 AI。`
+                    : result.status === "needs_clarification"
+                        ? (result.validation_issues?.join("；") || data.clarification || data.reply)
+                        : data.reply || "请告诉我起点、时长和想逛的主题。";
+                if (result.status === "ready" && data.intent === "explain_place") {
+                    try {
+                        const answer = await requestJson("/api/place_answer", { method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ message: text, trip_state: tripState, current_route: result.comparison_baseline }) });
+                        reply = answer.reply;
+                        if (answer.source !== "model") {
+                            serviceStatus.textContent = "意图已理解 · 讲解未完成";
+                            serviceStatus.title = failureDescription(answer);
+                        }
+                    } catch (error) {
+                        if (activeRequest?.signal.aborted) throw error;
+                        reply = "已理解你要查询的地点，但这次资料讲解未完成，路线没有改变；开放信息请向场馆核实。";
+                        serviceStatus.textContent = "意图已理解 · 讲解未完成";
+                    }
+                }
                 appendMessage("assistant", data.source === "fallback" && data.fallback_reason !== "rule_based"
                     ? `${failureDescription(data)}，这条先用备用回复，下一条会继续尝试 AI。\n${reply}` : reply);
                 actionSummary = reply;
+                if (result.status === "unavailable" && !chatInput.value) chatInput.value = text;
             }
             chatHistory.push({ role: "user", content: text }, { role: "assistant", content: actionSummary });
             chatHistory = chatHistory.slice(-16);
@@ -1270,6 +1268,7 @@
             if (!chatInput.value && !(error instanceof RouteError)) chatInput.value = text;
         } finally {
             activeRequest = null;
+            executionIntent = null;
             activeProgress = null;
             setBusy(false);
             if (!isMobileLayout() || appRoot.dataset.mobileView === "chat") chatInput.focus();

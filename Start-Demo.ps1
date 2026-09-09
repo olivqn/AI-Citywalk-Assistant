@@ -1,4 +1,4 @@
-param([switch]$NoBrowser)
+param([switch]$NoBrowser, [switch]$Restart)
 $ErrorActionPreference = 'Stop'
 $demoRoot = $PSScriptRoot
 $demoUrl = 'http://127.0.0.1:8000'
@@ -11,9 +11,22 @@ function Get-DemoHealth {
 try {
     $demoHealth = Get-DemoHealth
     if ($demoHealth.app -eq 'xuhui-citywalk') {
+        $needsRestart = $demoHealth.restart_required -or $demoHealth.intent_endpoint -ne '/api/intent'
+        if ($Restart -or $needsRestart) {
+            if ($demoHealth.workspace -ne $demoRoot -or !$demoHealth.pid) {
+                throw 'An older server is running on 8000. Stop its original terminal/server once, then run this launcher again. No unknown process was stopped.'
+            }
+            $runningDemo = Get-CimInstance Win32_Process -Filter "ProcessId = $($demoHealth.pid)"
+            if ($runningDemo.Name -notlike 'python*' -or $runningDemo.CommandLine -notlike '*uvicorn main:app*--port 8000*') {
+                throw 'Server identity did not match. No process was stopped.'
+            }
+            Stop-Process -Id $runningDemo.ProcessId
+            $demoHealth = $null
+        } else {
         Write-Host "Demo is ready: $demoUrl"
         if (!$NoBrowser) { Start-Process $demoUrl }
         exit 0
+        }
     }
 
     $demoPython = Join-Path $demoRoot '.venv\Scripts\python.exe'
