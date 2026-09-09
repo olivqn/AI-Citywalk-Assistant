@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "scope": "上海市徐汇区；武康路、衡山路、徐家汇及西岸的精选示例，不是全区完整名录",
+  "verified_on": "2026-09-08",
+  "note": "查阅官方公开资料整理；verified_on 仅指资料查阅日，不代表营业、开放、预约、价格或展览的实时确认。无预设坐标，路线仍需地图核验。editorial_tags 是人工审美描述，不是官方认定。",
+  "places": [
+    {
+      "id": "wukang-building",
+      "name": "武康大楼",
+      "aliases": ["诺曼底公寓", "东美特公寓"],
+      "address": "上海市徐汇区淮海中路1836—1858号",
+      "area": "武康路",
+      "tags": ["heritage", "历史建筑", "公寓", "电影文化"],
+      "editorial_tags": ["复古", "电影感", "建筑摄影"],
+      "description": "武康路街区的历史公寓地标，与多位电影人的生活和创作有关；以外观欣赏为宜。",
+      "sources": [
+        {"title": "徐汇区文物保护点信息变更公告（武康大楼地址）", "url": "https://www.xuhui.gov.cn/xxgk/portal/article/detail?id=8a4c0c069a97abda019d3dcaa9bc19f1"},
+        {"title": "漫步衡复风貌区，寻迹徐汇红色之旅", "url": "https://www.xuhui.gov.cn/gzfw_tpdt/20260611/574181.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "soong-ching-ling-residence",
+      "name": "上海宋庆龄故居纪念馆",
+      "aliases": ["上海宋庆龄故居", "宋庆龄故居纪念馆", "宋庆龄故居"],
+      "address": "上海市徐汇区淮海中路1843号",
+      "area": "武康路",
+      "tags": ["heritage", "名人故居", "纪念馆", "历史建筑"],
+      "editorial_tags": ["人文漫步"],
+      "description": "宋庆龄在上海生活与从事国务活动的重要场所，现为纪念馆。",
+      "sources": [
+        {"title": "上海宋庆龄故居纪念馆官网", "url": "https://shsoong-chingling.com/"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "bajin-residence",
+      "name": "巴金故居",
+      "aliases": ["巴金旧居", "上海巴金故居"],
+      "address": "上海市徐汇区武康路113号",
+      "area": "武康路",
+      "tags": ["heritage", "名人故居", "历史建筑", "文学"],
+      "editorial_tags": ["人文漫步", "文艺"],
+      "description": "位于武康路的作家巴金旧居，是了解巴金与徐汇文学生活的地点。",
+      "sources": [
+        {"title": "重磅！徐汇这座阅光宝盒又要放大招了（巴金故居）", "url": "https://www.xuhui.gov.cn/gzfw-shdt/20240422/535778.html"},
+        {"title": "巴金诞辰120年｜来徐汇，邂逅巴金的世界", "url": "https://www.xuhui.gov.cn/gzfw-shdt/20241126/547795.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "wukang-tourist-center",
+      "name": "武康路旅游咨询中心",
+      "aliases": ["上海老房子艺术中心", "徐汇老房子艺术中心"],
+      "address": "上海市徐汇区武康路393号甲",
+      "area": "武康路",
+      "tags": ["heritage", "历史建筑", "游客中心", "文化展览"],
+      "editorial_tags": ["人文漫步"],
+      "description": "黄兴旧居所在地的旅游咨询与文化展示空间；393号其他部分为民居，不应当作可进入景点。",
+      "sources": [
+        {"title": "漫步衡复风貌区，寻迹徐汇红色之旅（黄兴旧居与咨询中心）", "url": "https://www.xuhui.gov.cn/gzfw_tpdt/20260611/574181.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "arabica-wukang",
+      "name": "% Arabica（武康路店）",
+      "aliases": ["%Arabica武康路店", "Arabica武康路店", "% Arabica Shanghai Wukang Lu", "%Arabica武康庭店"],
+      "address": "上海市徐汇区武康路374号1楼112号铺",
+      "area": "武康路",
+      "tags": ["coffee", "咖啡店", "武康庭"],
+      "editorial_tags": ["咖啡休憩", "庭院氛围"],
+      "description": "位于武康庭内的咖啡分店，品牌官网列明具体铺位。",
+      "sources": [
+        {"title": "% Arabica 官方门店页：上海武康路店", "url": "https://arabicacoffee.hk/tc/locations/arabica-shanghai-wukang-lu"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "dayin-wukang",
+      "name": "大隐书局·印象武康主题店",
+      "aliases": ["大隐书局印象武康主题店", "大隐书局武康大楼店", "大隐书局武康路店"],
+      "address": "上海市徐汇区淮海中路1834号-1",
+      "area": "武康路",
+      "tags": ["bookstore", "书店", "文创", "城市文化"],
+      "editorial_tags": ["文艺", "人文漫步"],
+      "description": "武康大楼内的书店与文旅服务空间，官方资料记录其2024年以印象武康主题店焕新。",
+      "sources": [
+        {"title": "武康大楼这家书店升级焕新，助力城市文旅更有温度", "url": "https://whlyj.sh.gov.cn/gqfc/20240527/4ccbc821bbfe49d2a7b005c6d70309c3.html"},
+        {"title": "武康大楼大隐书局7年（门店地址及续营报道）", "url": "https://www.shanghai.gov.cn/nw4411/20240109/1abb060feaa948cda0f217ae9c9b3b70.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "hengshan-park",
+      "name": "衡山公园",
+      "aliases": ["上海衡山公园", "贝当公园"],
+      "address": "上海市徐汇区广元路2号",
+      "area": "衡山路",
+      "tags": ["garden", "公园", "园林", "古树"],
+      "editorial_tags": ["松弛感", "绿意", "慢逛"],
+      "description": "衡山路附近的城市公园，保有法式园林特征及古香樟、古紫藤。",
+      "sources": [
+        {"title": "与古树同行｜到徐汇这座百年公园，探秘年轮纹路里的城市秘境", "url": "https://www.xuhui.gov.cn/xwzx_zwxx/20250417/555537.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "xujiahui-park",
+      "name": "徐家汇公园",
+      "aliases": ["上海徐家汇公园"],
+      "address": "上海市徐汇区肇嘉浜路986号",
+      "area": "徐家汇",
+      "tags": ["garden", "公园", "绿地", "城市步行"],
+      "editorial_tags": ["松弛感", "绿意", "慢逛"],
+      "description": "徐家汇商圈的公园绿地，园区保留百代小红楼与原橡胶厂烟囱等城市记忆。",
+      "sources": [
+        {"title": "上海市人民政府：徐汇区（徐家汇公园介绍）", "url": "https://www.shanghai.gov.cn/xuhui/index.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "pathe-villa",
+      "name": "百代小楼",
+      "aliases": ["百代小红楼", "百代小楼（《义勇军进行曲》灌制地）"],
+      "address": "上海市徐汇区衡山路811号",
+      "area": "衡山路",
+      "tags": ["heritage", "历史建筑", "音乐文化", "红色文化"],
+      "editorial_tags": ["复古", "人文漫步"],
+      "description": "与《义勇军进行曲》灌制及中国唱片发展历史相关的红色文化地点。",
+      "sources": [
+        {"title": "上海市红色资源名录检索与展示系统（百代小楼）", "url": "https://red.library.sh.cn/minglu/"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "zikawei-library",
+      "name": "徐家汇书院",
+      "aliases": ["Zikawei Library", "徐家汇书院图书馆"],
+      "address": "上海市徐汇区漕溪北路158号",
+      "area": "徐家汇",
+      "tags": ["图书馆", "阅读", "城市文化", "文化展览"],
+      "editorial_tags": ["文艺", "人文漫步"],
+      "description": "以阅读和徐汇文脉展示为特色的公共图书馆空间；不是售书门店。",
+      "sources": [
+        {"title": "循着书香，来一场徐家汇源寻源之旅", "url": "https://whlyj.sh.gov.cn/gqfc/20230302/2e61154ff6b148d5ae3a64aa5164f279.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "xujiahui-cathedral",
+      "name": "徐家汇天主堂",
+      "aliases": ["徐家汇大教堂", "徐家汇天主教堂", "徐家汇圣依纳爵主教座堂"],
+      "address": "上海市徐汇区蒲西路158号",
+      "area": "徐家汇",
+      "tags": ["heritage", "历史建筑", "教堂", "哥特式建筑"],
+      "editorial_tags": ["建筑摄影", "人文漫步"],
+      "description": "徐家汇源的哥特式教堂建筑，以尖顶与彩绘玻璃见长；是否可入内需另查当日安排。",
+      "sources": [
+        {"title": "这座曾经的徐家汇最高建筑有着上海最美尖顶", "url": "https://www.xuhui.gov.cn/xwzx_bmlf/20230413/514234.html"},
+        {"title": "徐汇区档案信息网：徐家汇天主堂修缮（地址）", "url": "https://www.xuhui.gov.cn/xhda/xhda/xhbl/xhnj/2019/08/27/9f8086926cbda259016cd1aa7d45154b.html?tm=1740650443068"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "guangqi-park",
+      "name": "光启公园",
+      "aliases": ["上海光启公园"],
+      "address": "上海市徐汇区南丹路17号",
+      "area": "徐家汇",
+      "tags": ["garden", "公园", "历史文化", "徐光启"],
+      "editorial_tags": ["人文漫步", "慢逛"],
+      "description": "与徐光启历史相关的公园，园内设有徐光启纪念馆；公园与馆内参观是不同事项。",
+      "sources": [
+        {"title": "光启公园获评上海市新时代文明实践公园", "url": "https://www.xuhui.gov.cn/zfjg_qzfbm_lvhsrglj_bmdt/20230307/512103.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "tushanwan-museum",
+      "name": "土山湾博物馆",
+      "aliases": ["上海土山湾博物馆", "上海市徐汇区土山湾博物馆"],
+      "address": "上海市徐汇区蒲汇塘路55号",
+      "area": "徐家汇",
+      "tags": ["heritage", "博物馆", "历史文化", "工艺美术", "彩绘玻璃"],
+      "editorial_tags": ["人文漫步", "文艺"],
+      "description": "展示土山湾工艺与中西文化交流历史的博物馆，藏品涉及木雕、绘画及彩绘玻璃等。",
+      "sources": [
+        {"title": "徐汇的人文底蕴，在这条线路上", "url": "https://www.xuhui.gov.cn/gzfw-shdt/20231007/524395.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "zhongshuge-xuhui-greenland",
+      "name": "钟书阁（徐汇绿地缤纷城店）",
+      "aliases": ["钟书阁徐汇绿地缤纷城店", "钟书阁（徐汇店）", "钟书阁徐汇店"],
+      "address": "上海市徐汇区龙华中路759号绿地缤纷城1楼",
+      "area": "龙华中路",
+      "tags": ["bookstore", "书店", "阅读", "儿童阅读"],
+      "editorial_tags": ["文艺"],
+      "description": "绿地缤纷城内的书店，官方儿童友好阅读空间名录收录其阅读及亲子活动空间。",
+      "sources": [
+        {"title": "儿童友好城市阅读新空间47家焕新升级（徐汇区钟书阁）", "url": "https://whlyj.sh.gov.cn/wlyw/20250928/ce1d49046cb445d3b8463627ca94fc64.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "long-museum-west-bund",
+      "name": "龙美术馆（西岸馆）",
+      "aliases": ["龙美术馆西岸馆", "Long Museum West Bund"],
+      "address": "上海市徐汇区龙腾大道3398号",
+      "area": "西岸",
+      "tags": ["modern", "美术馆", "现代建筑", "工业遗存", "滨江"],
+      "editorial_tags": ["工业风", "建筑摄影", "文艺"],
+      "description": "徐汇滨江的美术馆，建筑采用清水混凝土伞拱结构，并与原码头煤漏斗遗存相呼应。",
+      "sources": [
+        {"title": "龙美术馆官网：West Bund", "url": "https://www.thelongmuseum.org/en/west-bund.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "west-bund-museum",
+      "name": "西岸美术馆",
+      "aliases": ["West Bund Museum", "上海西岸美术馆"],
+      "address": "上海市徐汇区龙腾大道2600号",
+      "area": "西岸",
+      "tags": ["modern", "美术馆", "艺术展览", "滨江"],
+      "editorial_tags": ["文艺", "艺术漫步"],
+      "description": "龙腾大道上的美术馆，设艺术展览与公共文化空间；具体展览以场馆发布为准。",
+      "sources": [
+        {"title": "西岸美术馆官网", "url": "https://wbmshanghai.com/zh-hans"},
+        {"title": "上海西岸官方：西岸美术馆", "url": "https://www.westbund.com/cn/index/KEY-PROJECTS/event_list_695y4T.html"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "tank-shanghai",
+      "name": "上海油罐艺术中心",
+      "aliases": ["油罐艺术中心", "TANK Shanghai"],
+      "address": "上海市徐汇区龙腾大道2380号",
+      "area": "西岸",
+      "tags": ["modern", "美术馆", "艺术展览", "滨江"],
+      "editorial_tags": ["艺术漫步", "文艺"],
+      "description": "位于西岸龙腾大道的艺术场馆，收录于上海市文旅推广网的美术馆栏目。",
+      "sources": [
+        {"title": "上海市文旅推广网：上海油罐艺术中心", "url": "https://www.meet-in-shanghai.net/cn/art-museum/shanghai-tank-art-center-336176/"}
+      ],
+      "verified_on": "2026-09-08"
+    },
+    {
+      "id": "boocup-west-bund-dream-center",
+      "name": "BOOCUP现代书店（西岸梦中心店）",
+      "aliases": ["BOOCUP西岸梦中心店", "BOOCUP现代书店西岸梦中心店"],
+      "address": "上海市徐汇区龙腾大道2266号西岸梦中心南区9栋1楼",
+      "area": "西岸",
+      "tags": ["bookstore", "书店", "文创", "滨江"],
+      "editorial_tags": ["文艺", "慢逛"],
+      "description": "西岸梦中心南区9栋内的书店及文创空间，使用具体楼栋识别，避免混淆同名店。",
+      "sources": [
+        {"title": "探徐汇｜徐汇滨江的春天太自在了（BOOCUP地址）", "url": "https://www.shanghai.gov.cn/nw17239/20250317/cc760844ccbf4a15ab0583bd654d7914.html"}
+      ],
+      "verified_on": "2026-09-08"
+    }
+  ]
+}

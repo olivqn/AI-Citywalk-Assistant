@@ -4,3 +4,5 @@ __pycache__/
 PROJECT_EXPERIENCE.md
 README.md
 GITHUB_README.md
+.venv/
+.demo-logs/
