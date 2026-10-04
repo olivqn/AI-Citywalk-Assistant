@@ -810,7 +810,9 @@
         }
 
         // ─── AI 聊天逻辑 ───
-        const API_URL = "https://ai-citywalk-assistant.onrender.com/api/chat";
+        // 本地和云端均由 FastAPI 提供页面，API 跟随当前页面的域名和端口。
+        const API_URL = "/api/chat";
+        const FILTER_POIS_URL = "/api/filter_pois";
         let chatHistory = []; // 记忆历史
 
         const chatMessages = document.getElementById('chat-messages');
@@ -874,6 +876,7 @@
                         history: chatHistory
                     })
                 });
+                if (!resp.ok) throw new Error(`聊天请求失败: HTTP ${resp.status}`);
                 const data = await resp.json();
                 removeTyping();
 
@@ -889,7 +892,7 @@
                 }
             } catch (err) {
                 removeTyping();
-                appendMessage('assistant', '网络连接失败，请确保后端服务已启动 (uvicorn main:app --reload)');
+                appendMessage('assistant', '暂时无法连接 AI 导游，请稍后再试。');
             }
         }
 
@@ -964,7 +967,7 @@
             try {
                 const poiNames = allPois.map(p => p.title);
                 const recentHistory = chatHistory.slice(-10);
-                const filterResp = await fetch('https://ai-citywalk-assistant.onrender.com/api/filter_pois', {
+                const filterResp = await fetch(FILTER_POIS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -973,6 +976,7 @@
                         history: recentHistory
                     })
                 });
+                if (!filterResp.ok) throw new Error(`地点筛选请求失败: HTTP ${filterResp.status}`);
                 const filterData = await filterResp.json();
                 if (filterData.filtered_names && filterData.filtered_names.length > 0) {
                     const keepSet = new Set(filterData.filtered_names);
