@@ -157,12 +157,14 @@
     function isMobileLayout() { return Boolean(window.matchMedia?.("(max-width: 640px), (max-width: 950px) and (max-height: 500px)")?.matches); }
 
     function setPanelExpanded(expanded) {
+        if (!expanded) hideGpsSuggestions();
         routePanel.dataset.expanded = String(expanded);
         panelToggle?.setAttribute("aria-expanded", String(expanded));
         if (panelToggle) panelToggle.textContent = expanded ? "收起详情" : "展开详情";
     }
 
     function setMobileView(view) {
+        if (view === "chat") hideGpsSuggestions();
         appRoot.dataset.mobileView = view;
         mobileMapTab?.setAttribute("aria-pressed", String(view === "map"));
         mobileChatTab?.setAttribute("aria-pressed", String(view === "chat"));
@@ -170,6 +172,7 @@
             chatInput.blur?.();
             window.requestAnimationFrame?.(() => {
                 if (!map) return;
+                map.checkResize?.();
                 if (currentRoute.length || discoveryPlaces.length || walkingGuide) paintRoute(currentRoute, currentMetrics);
                 else map.centerAndZoom(currentUserPoint || new BMapGL.Point(DEFAULT_CENTER.lng, DEFAULT_CENTER.lat), 15);
             });
@@ -220,6 +223,12 @@
         map = new BMapGL.Map("container");
         map.centerAndZoom(new BMapGL.Point(DEFAULT_CENTER.lng, DEFAULT_CENTER.lat), 15);
         map.enableScrollWheelZoom(true);
+        map.addEventListener?.("resize", () => {
+            window.requestAnimationFrame?.(() => {
+                if (isMobileLayout() && appRoot.dataset.mobileView !== "map") return;
+                if (currentRoute.length || discoveryPlaces.length || walkingGuide) paintRoute(currentRoute, currentMetrics);
+            });
+        });
         try {
             map.setMapStyleV2({ styleId: "6b0a5e0b2bef73dabbbb2b6b5c2b0341" });
         } catch (_) {
@@ -361,7 +370,14 @@
         gpsSuggestions.style.display = "block";
     }
 
+    function cancelGpsSearch() {
+        clearTimeout(gpsDebounceTimer);
+        gpsDebounceTimer = null;
+        gpsSearchSeq += 1;
+    }
+
     function hideGpsSuggestions() {
+        cancelGpsSearch();
         gpsSuggestions.style.display = "none";
         gpsSuggestions.replaceChildren();
     }
@@ -375,7 +391,10 @@
     }
 
     function renderGpsSuggestions(pois) {
-        if (isMobileLayout()) { setMobileView("map"); setPanelExpanded(true); }
+        if (isMobileLayout()) {
+            if (appRoot.dataset.mobileView !== "map") return;
+            setPanelExpanded(true);
+        }
         gpsSuggestions.replaceChildren();
         if (!pois.length) {
             showGpsSuggestionMessage("没有找到匹配地点，请输入更具体的地标");
@@ -475,7 +494,8 @@
     function addStartMarker() {
         if (!map || !currentUserPoint) return;
         const marker = new BMapGL.Marker(currentUserPoint);
-        const label = new BMapGL.Label("起点", { offset: new BMapGL.Size(15, -18) });
+        // Keep the origin to the left on phones; stop numbers sit to the right.
+        const label = new BMapGL.Label("起点", { offset: new BMapGL.Size(isMobileLayout() ? -50 : 15, -18) });
         label.setStyle({
             color: "#0a1628",
             backgroundColor: "#4facfe",
@@ -876,7 +896,20 @@
         // layout, with space for the floating route header and bottom CTA.
         if (viewportPoints.length) {
             const top = isMobileLayout() ? Math.min(280, (routePanel.getBoundingClientRect?.().height || 66) + 45) : 55;
-            map.setViewport(viewportPoints, { margins: [top, 80, isMobileLayout() ? 110 : 55, 55], delay: 0 });
+            const bottom = isMobileLayout() ? 110 : 55;
+            const options = { margins: [top, 80, bottom, 55], delay: 0 };
+            if (isMobileLayout() && map.getViewport && map.getSize) {
+                // The SDK's margin fit can zoom in on a short landscape map.
+                // Cap it using the actual space left between the panel and CTA.
+                const size = map.getSize();
+                const scale = Math.min((size.width - 135) / size.width, (size.height - top - bottom) / size.height);
+                if (scale > 0 && scale < 1) {
+                    const base = map.getViewport(viewportPoints, { margins: [0, 0, 0, 0] });
+                    const fitted = map.getViewport(viewportPoints, options);
+                    options.zoomFactor = Math.min(0, base.zoom + Math.log2(scale) - fitted.zoom);
+                }
+            }
+            map.setViewport(viewportPoints, options);
         }
     }
 
@@ -1427,7 +1460,12 @@
             hideGpsSuggestions();
         }
     });
-    gpsInput.addEventListener("blur", () => setTimeout(hideGpsSuggestions, 150));
+    gpsInput.addEventListener("blur", () => {
+        cancelGpsSearch();
+        setTimeout(() => {
+            if (document.activeElement !== gpsInput) hideGpsSuggestions();
+        }, 150);
+    });
     setStartButton.addEventListener("click", setStartFromInput);
     undoButton?.addEventListener("click", () => sendMessage("撤销上一步"));
     panelToggle?.addEventListener("click", () => setPanelExpanded(routePanel.dataset.expanded !== "true"));

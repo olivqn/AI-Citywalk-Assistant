@@ -311,6 +311,9 @@ function createApp({ chat = () => response({ reply: "你好，想从哪里开始
         mapTab: elements.get("mobile-map-tab"),
         chatTab: elements.get("mobile-chat-tab"),
         animationFrames,
+        hasTimeout(delay) {
+            return [...timers.values()].some(timer => timer.delay === delay);
+        },
         fireTimeout(delay) {
             const matching = [...timers].filter(([, timer]) => timer.delay === delay);
             assert.ok(matching.length, `Expected a ${delay} ms timeout`);
@@ -1073,4 +1076,113 @@ test("a mobile chat-only reply stays in chat and keeps the input usable", async 
     assert.equal(app.input.blurCount || 0, 0);
     assert.equal(app.chatTab.textContent, "对话");
     assertReady(app);
+});
+
+function createMobileGpsApp() {
+    const { sdk: mapSdk, control } = createMapSdk();
+    const app = createApp({ mobile: true, mapSdk });
+    app.window.citywalkMapReady();
+    app.panelToggle.dispatch("click");
+    return { app, control, gps: app.document.getElementById("gps-input"),
+        suggestions: app.document.getElementById("gps-suggestions") };
+}
+
+test("switching to mobile chat cancels a pending origin suggestion debounce", async () => {
+    const { app, control, gps, suggestions } = createMobileGpsApp();
+    gps.value = "上海图书馆";
+    gps.dispatch("input");
+    assert.equal(app.hasTimeout(300), true);
+    app.chatTab.dispatch("click");
+    await flush();
+    assert.equal(app.hasTimeout(300), false, "leaving the origin field must cancel the queued map lookup");
+    assert.equal(control.queries.length, 0);
+    assert.equal(app.appRoot.dataset.mobileView, "chat");
+    assert.equal(suggestions.style.display, "none");
+});
+
+test("a late origin suggestion response cannot switch mobile chat back to the map", async () => {
+    const { app, control, gps, suggestions } = createMobileGpsApp();
+    control.holdSearch = true;
+    gps.value = "上海图书馆";
+    gps.dispatch("input");
+    app.fireTimeout(300);
+    assert.equal(control.pendingSearch.length, 1);
+    app.chatTab.dispatch("click");
+    control.pendingSearch.shift()();
+    await flush();
+    assert.equal(app.appRoot.dataset.mobileView, "chat");
+    assert.equal(app.chatTab.getAttribute("aria-pressed"), "true");
+    assert.equal(suggestions.style.display, "none");
+    assert.equal(suggestions.children.length, 0);
+    assert.equal(app.requests.length, 0);
+});
+
+for (const dismissal of ["collapse", "Escape"]) {
+    test(`${dismissal} dismisses origin suggestions even when a map response arrives later`, async () => {
+        const { app, control, gps, suggestions } = createMobileGpsApp();
+        control.holdSearch = true;
+        gps.value = "上海图书馆";
+        gps.dispatch("input");
+        app.fireTimeout(300);
+        assert.equal(control.pendingSearch.length, 1);
+        if (dismissal === "collapse") app.panelToggle.dispatch("click");
+        else gps.dispatch("keydown", { key: "Escape" });
+        const expanded = app.panel.dataset.expanded;
+        control.pendingSearch.shift()();
+        await flush();
+        assert.equal(suggestions.style.display, "none");
+        assert.equal(suggestions.children.length, 0);
+        assert.equal(app.panel.dataset.expanded, expanded, "a dismissed response must not reopen the panel");
+        assert.equal(app.appRoot.dataset.mobileView, "map");
+    });
+}
+
+test("returning to the map accepts a fresh origin search while ignoring the previous view's response", async () => {
+    const { app, control, gps, suggestions } = createMobileGpsApp();
+    control.holdSearch = true;
+    gps.value = "上海图书馆";
+    gps.dispatch("input");
+    app.fireTimeout(300);
+    app.chatTab.dispatch("click");
+    app.mapTab.dispatch("click");
+    app.panelToggle.dispatch("click");
+    gps.value = "徐家汇地铁站";
+    gps.dispatch("input");
+    app.fireTimeout(300);
+    assert.equal(control.pendingSearch.length, 2);
+    control.pendingSearch.pop()();
+    await flush();
+    assert.equal(suggestions.style.display, "block");
+    assert.match(suggestions.textContent, /徐家汇地铁站/);
+    const freshSuggestions = suggestions.textContent;
+    control.pendingSearch.shift()();
+    await flush();
+    assert.equal(suggestions.textContent, freshSuggestions);
+    assert.equal(app.panel.dataset.expanded, "true");
+    assert.equal(app.appRoot.dataset.mobileView, "map");
+    assert.deepEqual(control.queries.map(item => item.query), ["上海图书馆", "徐家汇地铁站"]);
+});
+
+test("origin blur invalidates the old response without dismissing a search started after refocus", async () => {
+    const { app, control, gps, suggestions } = createMobileGpsApp();
+    control.holdSearch = true;
+    gps.value = "上海图书馆";
+    gps.dispatch("input");
+    app.fireTimeout(300);
+    app.document.activeElement = app.input;
+    gps.dispatch("blur");
+    control.pendingSearch.shift()();
+    await flush();
+    assert.match(suggestions.textContent, /正在搜索候选地点/);
+    assert.doesNotMatch(suggestions.textContent, /上海图书馆/);
+    app.document.activeElement = gps;
+    gps.value = "徐家汇地铁站";
+    gps.dispatch("focus");
+    assert.equal(control.pendingSearch.length, 1);
+    app.fireTimeout(150);
+    assert.equal(suggestions.style.display, "block", "the old blur timer must preserve the refocused search");
+    control.pendingSearch.shift()();
+    await flush();
+    assert.equal(suggestions.style.display, "block");
+    assert.match(suggestions.textContent, /徐家汇地铁站/);
 });
