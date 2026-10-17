@@ -1,9 +1,223 @@
 {
-  "version": 1,
-  "scope": "上海市徐汇区；武康路、衡山路、徐家汇及西岸的精选示例，不是全区完整名录",
-  "verified_on": "2026-09-08",
+  "version": 2,
+  "scope": "上海市徐汇区；衡复街区、徐家汇、龙华、西岸、田林及植物园周边精选地点，不是全区完整名录",
+  "verified_on": "2026-09-16",
   "note": "查阅官方公开资料整理；verified_on 仅指资料查阅日，不代表营业、开放、预约、价格或展览的实时确认。无预设坐标，路线仍需地图核验。editorial_tags 是人工审美描述，不是官方认定。",
   "places": [
+    {
+      "id": "qian-xuesen-library",
+      "name": "钱学森图书馆",
+      "aliases": ["上海交通大学钱学森图书馆"],
+      "address": "上海市徐汇区华山路1800号",
+      "area": "徐家汇",
+      "tags": ["museum", "博物馆", "科技", "航天", "人物纪念", "科学史"],
+      "editorial_tags": ["科学人文", "亲子科普"],
+      "description": "以钱学森生平及中国航天事业为主题的纪念性博物馆，可了解科学家的成长与贡献。名称虽为图书馆，不能当作售书门店；航天史内容也不等于科幻游乐或常设互动体验，具体参观安排需向场馆核实。",
+      "sources": [{"title": "钱学森图书馆官网：参观服务与地址", "url": "https://www.qianxslib.sjtu.edu.cn/visit/visit04.php"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-meteorological-museum",
+      "name": "上海气象博物馆",
+      "aliases": ["徐家汇观象台", "徐家汇观象台旧址"],
+      "address": "上海市徐汇区蒲西路166号",
+      "area": "徐家汇",
+      "tags": ["museum", "博物馆", "科技", "科学史", "气象", "历史建筑"],
+      "editorial_tags": ["科学人文", "亲子科普"],
+      "description": "设于徐家汇观象台旧址，展示气象发展历史、观测仪器及文献，可从气象记录理解城市生活与科学的关系。资料提及罗盘、气压计和观测手稿；入馆预约及讲解场次须提前核实，不等于随到随进的科技乐园。",
+      "sources": [{"title": "徐汇的人文底蕴，在这条线路上（气象博物馆）", "url": "https://www.xuhui.gov.cn/gzfw-shdt/20231007/524395.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-radio-museum",
+      "name": "上海无线电博物馆",
+      "aliases": [],
+      "address": "上海市徐汇区田林路200号A5栋一楼",
+      "area": "田林",
+      "tags": ["museum", "博物馆", "科技", "无线电", "科学史", "收音机"],
+      "editorial_tags": ["复古", "科学人文"],
+      "description": "以无线电为主题，展示收音机、电视机和收发报机等，适合了解声音媒介与技术史，不承诺未来感或特定互动设备可用。文旅推广网标注A5栋一楼，年度名录写B幢1楼；均为田林路200号，园区楼栋与入口应现场核实。",
+      "sources": [
+        {"title": "上海市文旅推广网：上海无线电博物馆", "url": "https://www.meet-in-shanghai.net/cn/museum/shanghai-radio-museum-980647/"},
+        {"title": "博雅网：上海无线电博物馆场馆介绍", "url": "https://www.21boya.cn/dianping/place/detail?id=4969"},
+        {"title": "上海市博物馆名单（2025年度）", "url": "https://whlyj.sh.gov.cn/bwg/20260106/265b828de4394054bdc2e61e1599ed4c.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-film-museum",
+      "name": "上海电影博物馆",
+      "aliases": [],
+      "address": "上海市徐汇区漕溪北路595号A座1至4楼",
+      "area": "徐家汇",
+      "tags": ["museum", "博物馆", "电影", "电影文化", "艺术展览"],
+      "editorial_tags": ["电影感", "人文漫步"],
+      "description": "在原上海电影制片厂所在地呈现上海电影发展、电影人物与幕后制作。历史报道介绍过多媒体互动区域，但不能据此保证某项体验今天仍开放；当期展览和票务以场馆发布为准。",
+      "sources": [
+        {"title": "上海市博物馆名单（2025年度）：电影博物馆地址", "url": "https://whlyj.sh.gov.cn/bwg/20260106/265b828de4394054bdc2e61e1599ed4c.html"},
+        {"title": "上海电影博物馆开馆报道与幕后体验", "url": "https://whlyj.sh.gov.cn/wbzx/20130520/0022-24676.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-arts-crafts-museum",
+      "name": "上海工艺美术博物馆",
+      "aliases": [],
+      "address": "上海市徐汇区汾阳路79号",
+      "area": "衡复街区",
+      "tags": ["heritage", "博物馆", "工艺美术", "历史建筑", "老洋房", "雕刻", "织绣"],
+      "editorial_tags": ["建筑摄影", "文艺"],
+      "description": "位于汾阳路的历史建筑内，展示民间工艺、雕刻与织绣等门类。可以把建筑外观与传统手工艺放在一起看；不要把馆内专业工作室理解为可随时参与的手作课程。",
+      "sources": [
+        {"title": "上海市人民政府：徐汇区工艺美术博物馆介绍", "url": "https://www.shanghai.gov.cn/xuhui/index.html"},
+        {"title": "上海虹口：衡复建筑介绍（汾阳路79号）", "url": "https://www.shhk.gov.cn/xwzx/002008/002008040/20230126/6553ed56-d350-42ef-8b2b-7c75f9cda28d.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "hengfu-history-museum",
+      "name": "衡复风貌馆",
+      "aliases": ["衡复旅游咨询中心"],
+      "address": "上海市徐汇区复兴西路62号",
+      "area": "衡复街区",
+      "tags": ["heritage", "历史建筑", "老洋房", "历史文化", "文化展览", "游客中心"],
+      "editorial_tags": ["人文漫步", "建筑摄影"],
+      "description": "设于1930年建成的历史建筑，兼有衡复风貌展示与旅游咨询功能。适合先了解街区建筑和文化背景，再在周边步行；具体开放安排与临展须另行核实。",
+      "sources": [{"title": "上海市文旅局：万般风情尽收眼底，衡复风貌馆", "url": "https://whlyj.sh.gov.cn/gqfc/20230630/afe27ef4684c48d58c53ecd47a7cdd99.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "zhang-leping-residence",
+      "name": "张乐平故居",
+      "aliases": ["上海张乐平故居"],
+      "address": "上海市徐汇区五原路288弄3号",
+      "area": "衡复街区",
+      "tags": ["heritage", "名人故居", "文化展览", "漫画", "三毛"],
+      "editorial_tags": ["人文漫步", "文艺"],
+      "description": "衡复风貌博物馆群中的故居展馆，公开文旅活动资料曾在此设置三毛主题绘画和博物馆戏剧。可作为了解张乐平与漫画文化的停靠点，往期活动不代表当天有演出或课程。",
+      "sources": [
+        {"title": "上海市文旅局：衡复风貌博物馆群地址", "url": "https://whlyj.sh.gov.cn/bwg/20210824/03fc7bcb5dfd4729bb9d081c05009b75.html"},
+        {"title": "上海市文旅局：衡复风貌博物馆群2023年活动资料", "url": "https://whlyj.sh.gov.cn/cmsres/7b/7bd1abea0c974303ab6060e60f21572a/2cf9205f6a86ca69da849d9415b8a23f.pdf"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "ke-ling-residence",
+      "name": "柯灵故居",
+      "aliases": ["上海柯灵故居"],
+      "address": "上海市徐汇区复兴西路147号",
+      "area": "衡复街区",
+      "tags": ["heritage", "名人故居", "文学", "文化展览"],
+      "editorial_tags": ["人文漫步", "文艺"],
+      "description": "衡复风貌博物馆群中的柯灵故居，是街区文学人物主题的参观地点。可与衡复风貌馆等周边地点组合；未收录足够详细的生平故事，不应据名称补写建筑年代或具体创作轶事。",
+      "sources": [{"title": "上海市文旅局：衡复风貌博物馆群地址", "url": "https://whlyj.sh.gov.cn/bwg/20210824/03fc7bcb5dfd4729bb9d081c05009b75.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "guilin-park",
+      "name": "桂林公园",
+      "aliases": ["上海桂林公园"],
+      "address": "上海市徐汇区桂林路128号",
+      "area": "田林",
+      "tags": ["garden", "公园", "园林", "花园", "桂花", "江南园林"],
+      "editorial_tags": ["绿意", "松弛感", "慢逛"],
+      "description": "以江南传统造园布局和桂花树见长，有亭台、小桥、水景与湖石。2026年7月有修缮后重新开放公告；园林漫步与当季赏花是不同体验，不能保证到访时桂花盛开或仍有公告中的短期市集。",
+      "sources": [
+        {"title": "上海绿化市容：桂林公园介绍", "url": "https://web.lhsr.sh.gov.cn/sites/ShanghaiGreen/qiantao/gongyuan_con.aspx?InfoId=a3435dc1-f7c3-4c80-8c79-c74bf407a8e2"},
+        {"title": "徐汇区：桂林公园2026年焕新启幕", "url": "https://www.xuhui.gov.cn/zfjg_qzfbm_lvhsrglj_bmdt/20260731/575544.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-botanical-garden",
+      "name": "上海植物园",
+      "aliases": ["Shanghai Botanical Garden"],
+      "address": "上海市徐汇区龙吴路1111号",
+      "area": "植物园",
+      "tags": ["garden", "植物园", "公园", "花园", "植物科普", "园艺"],
+      "editorial_tags": ["绿意", "慢逛", "自然观察"],
+      "description": "兼有植物研究、科普与园艺展示的城市植物园，设松柏、蕨类、木兰等专类区域。这里记录龙吴路1号门地址，不能等同于其他入口；园内游览、专类园门票及季节花期应另查，不能按一个街边停靠点估算全部游览时间。",
+      "sources": [
+        {"title": "上海市政府英文网：Shanghai Botanical Garden", "url": "https://english.shanghai.gov.cn/en-Parks/20231220/bfe6a47b21c74edd96d6aa6e547be48c.html"},
+        {"title": "上海市政府：上海植物园入口及专类园说明", "url": "https://www.shanghai.gov.cn/nw17239/20250208/86806cb2b1ce471591d508cd731e8532.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "start-museum",
+      "name": "星美术馆",
+      "aliases": ["START MUSEUM", "上海星美术馆"],
+      "address": "上海市徐汇区瑞宁路111号",
+      "area": "西岸",
+      "tags": ["modern", "美术馆", "现代建筑", "当代艺术", "工业遗存"],
+      "editorial_tags": ["建筑摄影", "工业风", "艺术漫步"],
+      "description": "位于原铁路南浦站十八线仓库所在地，主体建筑由让·努维尔设计。适合关注工业场所更新和当代艺术的游客；现代建筑不等于常设数字艺术或科幻展览，需查询当期展讯。",
+      "sources": [{"title": "上海西岸官方：星美术馆", "url": "https://www.westbund.com/cn/index/KEY-PROJECTS/detail_6f9E8.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "jiaoda-bookstore-panyu",
+      "name": "交大书院（番禺路店）",
+      "aliases": ["交大书院", "交大书院番禺路店"],
+      "address": "上海市徐汇区番禺路951号",
+      "area": "徐家汇",
+      "tags": ["bookstore", "书店", "阅读", "咖啡"],
+      "editorial_tags": ["文艺", "咖啡休憩"],
+      "description": "番禺路的书店与咖啡空间，公开资料记录在此举办新书分享活动。是交大书院而非漕溪北路的公共图书馆徐家汇书院；活动、菜单与座位情况须向门店核实。",
+      "sources": [
+        {"title": "上海市政府：书店与咖啡空间名录（交大书院）", "url": "https://korean.shanghai.gov.cn/ko-EditorsPick-travelinshanghai/20240319/20cd32229cde44458324456c2519737e.html"},
+        {"title": "长宁区：交大书院番禺路951号新书发布活动", "url": "https://www.shcn.gov.cn/col6991/20230821/1242493.html"}
+      ],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "saturnbird-into-the-force-anfu",
+      "name": "三顿半 into_the force（安福路店）",
+      "aliases": ["三顿半（安福路店）", "三顿半原力飞行（安福路店）", "Into the Force（安福路店）"],
+      "address": "上海市徐汇区安福路322号",
+      "area": "衡复街区",
+      "tags": ["coffee", "咖啡馆", "咖啡", "概念店"],
+      "editorial_tags": ["咖啡休憩", "街区漫步"],
+      "description": "三顿半品牌在安福路的线下概念店，公开介绍提到可移动桌椅与咖啡空间。可作为街区散步的休息候选；不将历史菜单、价格或座位情况视为实时信息，也不保证能买到线上全部产品。",
+      "sources": [{"title": "上海市政府：Discover Shanghai's cafe scene（Into the Force）", "url": "https://english.shanghai.gov.cn/en-Cafes/20231229/a97297d0707b4c0d831439979df6f8bb.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "rumours-coffee-hunan",
+      "name": "Rumours Coffee（湖南路店）",
+      "aliases": ["Rumours Coffee Roastery（湖南路店）", "Rumors Coffee（湖南路店）"],
+      "address": "上海市徐汇区湖南路9号",
+      "area": "衡复街区",
+      "tags": ["coffee", "咖啡馆", "咖啡", "手冲咖啡"],
+      "editorial_tags": ["咖啡休憩", "慢逛"],
+      "description": "公开咖啡指南收录的湖南路分店，品牌以日式手冲咖啡为特色。这里只记录徐汇湖南路店，不将长宁兴国路分店的地址混入路线；营业与具体豆单需另行核实。",
+      "sources": [{"title": "上海市政府：Discover Shanghai's cafe scene（Rumours分店地址）", "url": "https://english.shanghai.gov.cn/en-Cafes/20231229/a97297d0707b4c0d831439979df6f8bb.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "longhua-pagoda",
+      "name": "龙华塔",
+      "aliases": ["Longhua Pagoda"],
+      "address": "上海市徐汇区龙华路2853号",
+      "area": "龙华",
+      "tags": ["heritage", "历史建筑", "古塔", "传统建筑"],
+      "editorial_tags": ["建筑摄影", "人文漫步"],
+      "description": "龙华寺附近的七层八角楼阁式古塔，可观察塔身与传统建筑形制。塔与龙华寺不合并为同一地点，不承诺可登塔或入内，适合先按外观欣赏规划。",
+      "sources": [{"title": "上海市政府英文网：Longhua Pagoda", "url": "https://english.shanghai.gov.cn/en-ScenicSpots/20240102/1e097ed191fe482fa383a4d6802130b6.html"}],
+      "verified_on": "2026-09-16"
+    },
+    {
+      "id": "shanghai-library-huaihai",
+      "name": "上海图书馆（淮海路馆）",
+      "aliases": ["上海图书馆淮海路馆", "上海图书馆淮海中路馆"],
+      "address": "上海市徐汇区淮海中路1555号",
+      "area": "衡复街区",
+      "tags": ["图书馆", "阅读", "公共文化", "文献"],
+      "editorial_tags": ["人文漫步", "静心阅读"],
+      "description": "淮海中路的公共图书馆馆舍，提供图书、期刊与文献服务，可关注馆方讲座及展览公告。不是售书门店，也不是浦东迎春路的上海图书馆东馆；各阅览室使用条件与开放时间需分别查询。",
+      "sources": [{"title": "上海图书馆官网：淮海路馆及服务信息", "url": "https://www.library.sh.cn/"}],
+      "verified_on": "2026-09-16"
+    },
     {
       "id": "wukang-building",
       "name": "武康大楼",

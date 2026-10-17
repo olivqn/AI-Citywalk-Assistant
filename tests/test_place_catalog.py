@@ -151,5 +151,61 @@ class CatalogueTests(unittest.TestCase):
         self.assertIn("不得因此预告具体落图地点", system)
 
 
+class PublishedCatalogueTests(unittest.TestCase):
+    """Check the actual curated file, not only synthetic search fixtures."""
+
+    def test_all_rows_load_and_names_are_unambiguous(self):
+        payload = json.loads(catalog.CATALOG_PATH.read_text(encoding="utf-8-sig"))
+        places = catalog.load_catalog()
+        self.assertGreaterEqual(len(places), 34)
+        self.assertEqual(len(places), len(payload["places"]), "no invalid row may disappear silently")
+        owners = {}
+        for entry in places:
+            self.assertIn("徐汇区", entry["address"])
+            self.assertNotIn("point", entry)
+            for name in [entry["name"], *entry["aliases"]]:
+                key = catalog.normalize_name(name)
+                self.assertIn(owners.get(key), (None, entry["id"]), name)
+                owners[key] = entry["id"]
+                self.assertEqual(catalog.find_exact_place(name, places)["id"], entry["id"])
+
+    def test_new_places_are_retrievable_by_name_and_theme(self):
+        for name, identifier in {
+            "钱学森图书馆": "qian-xuesen-library", "上海气象博物馆": "shanghai-meteorological-museum",
+            "星美术馆": "start-museum", "交大书院（番禺路店）": "jiaoda-bookstore-panyu",
+            "上海植物园": "shanghai-botanical-garden", "衡复风貌馆": "hengfu-history-museum",
+        }.items():
+            self.assertEqual(catalog.search_places(name)[0]["id"], identifier)
+        for query, required in {
+            "咖啡": {"saturnbird-into-the-force-anfu", "rumours-coffee-hunan"},
+            "书店": {"jiaoda-bookstore-panyu"},
+            "花园": {"guilin-park", "shanghai-botanical-garden"},
+            "老洋房": {"hengfu-history-museum", "shanghai-arts-crafts-museum"},
+            "科技感": {"qian-xuesen-library", "shanghai-meteorological-museum", "shanghai-radio-museum"},
+        }.items():
+            self.assertTrue(required <= {p["id"] for p in catalog.search_places(query, 12)}, query)
+
+    def test_science_history_is_not_labelled_as_scifi_and_libraries_are_not_shops(self):
+        places = {p["id"]: p for p in catalog.load_catalog()}
+        for key in ("qian-xuesen-library", "shanghai-meteorological-museum", "shanghai-radio-museum"):
+            self.assertFalse({"科幻感", "未来感", "数字艺术"} & set(places[key]["tags"] + places[key]["editorial_tags"]))
+        bookstores = {p["id"] for p in catalog.search_places("书店", 12)}
+        self.assertNotIn("shanghai-library-huaihai", bookstores)
+        self.assertNotIn("qian-xuesen-library", bookstores)
+        self.assertNotIn("zikawei-library", bookstores)
+
+    def test_other_branches_and_generic_brands_do_not_inherit_facts(self):
+        for name in ("上海图书馆东馆", "Rumours Coffee（兴国路店）", "Rumours Coffee", "三顿半"):
+            self.assertIsNone(catalog.find_exact_place(name), name)
+        self.assertNotEqual(catalog.find_exact_place("交大书院")["id"], catalog.find_exact_place("徐家汇书院")["id"])
+
+    def test_new_places_reach_search_api_and_map_explanation_context(self):
+        client = TestClient(main.app)
+        data = client.get("/api/places/search", params={"query": "上海气象博物馆"}).json()
+        self.assertEqual(data["places"][0]["id"], "shanghai-meteorological-museum")
+        context = catalog.matching_map_context(["交大书院(番禺路店)", "星美术馆"])
+        self.assertEqual({p["id"] for p in context}, {"jiaoda-bookstore-panyu", "start-museum"})
+
+
 if __name__ == "__main__":
     unittest.main()

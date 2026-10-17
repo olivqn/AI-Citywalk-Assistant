@@ -111,6 +111,9 @@
     function isUsablePoi(poi) {
         const name = placeName(poi).normalize("NFKC").trim();
         if (!name || !inDemoArea(poi && poi.point)) return false;
+        // The bounding rectangle overlaps adjacent districts. Reject map data
+        // explicitly identifying another district; do not infer missing addresses.
+        if (/(?:长宁区|静安区|黄浦区|闵行区|普陀区|浦东新区)/.test(poi.address || "")) return false;
         if (/(?:有限公司|软件科技|物业|停车场|停车库|停车位|加油站|银行|医院|诊所|房产中介|售楼处|培训中心|瑜伽馆|办事处|写字楼|办公楼|商务楼|垃圾站|公共厕所|卫生间|快递柜|快递站|维修店)/.test(name)) return false;
         if (/(?:民宿|复式公寓|酒店式公寓|短租|日租|青年旅舍)/.test(name)) return false;
         if (/(?:停车|办公|住宅小区|住宅门牌)/.test(categoryText({ tags: poi.tags, category: poi.category, categories: poi.categories, type: poi.type }))) return false;
@@ -173,6 +176,8 @@
             && (!stops.length || !samePlace(placeName(stops[stops.length - 1]), requested.end))) {
             violations.push(`路线尚未以“${requested.end}”作为最后一站。`);
         }
+        if (requested.end_category && (!stops.length || !categoryMatches(stops.at(-1), requested.end_category)))
+            violations.push(`最后一站尚未满足“${requested.end_category}”类型。`);
         const duration = requested.duration_minutes;
         if (finiteNumber(duration) && duration > 0 && finiteNumber(measured.walkingMinutes) && measured.walkingMinutes >= 0) {
             const total = measured.walkingMinutes + estimatedVisitMinutes(points, requested);
@@ -219,7 +224,7 @@
     // Bounded search, not a language parser. Distances used for final acceptance
     // always come from measure() (map walking routes), never the ranking heuristic.
     async function fitRoute({ route, candidates = [], state = {}, goals = {}, baseline = {}, measure,
-        rank = () => 0, maxEvaluations = 40 }) {
+        rank = () => 0, maxEvaluations = 40, allowReplace = false, preserveOrder = false }) {
         const origin = route[0];
         const count = route.length - 1;
         let lower = Math.max(1, state.min_stops ?? 1);
@@ -263,9 +268,18 @@
         // Try changed order before adding/deleting places for distance-only goals.
         const seeds = [...variants];
         for (const stops of seeds) {
-            for (let a = 0; a < stops.length; a++) for (let b = a + 1; b < stops.length; b++) {
+            for (let a = 0; !preserveOrder && a < stops.length; a++) for (let b = a + 1; b < stops.length; b++) {
                 const reordered = [...stops]; [reordered[a], reordered[b]] = [reordered[b], reordered[a]];
                 variants.push(ordered(reordered));
+            }
+            if (allowReplace && !preserveOrder) {
+                for (let index = 0; index < stops.length; index++) {
+                    if (samePlace(stops[index], state.end) || list(state.required_places).some(p => samePlace(p, stops[index]))) continue;
+                    for (const poi of pool.filter(p => !stops.some(s => samePlace(s, p)))) {
+                        const replacement = [...stops]; replacement[index] = poi;
+                        variants.push(ordered(replacement));
+                    }
+                }
             }
             if (goals.distance === "increase" && !goals.stop_count && stops.length < upper) {
                 for (const poi of pool.filter(p => !stops.some(s => samePlace(s, p)))) variants.push(ordered([...stops, poi]));
@@ -287,7 +301,7 @@
             if (!issues.length) return { route: proposed, metrics };
             lastIssue = issues[0];
         }
-        throw new Error(`在本次有限候选搜索中未找到可行路线：${lastIssue}原路线与条件不变，可放宽条件再试。`);
+        throw new Error(`本次有限搜索未找到可行路线，原路线与条件不变。可以允许替换地点、减少停靠点或扩大搜索区域。未采用候选的原因：${lastIssue}`);
     }
 
     return Object.freeze({ normalizeName, samePlace, inDemoArea, isUsablePoi, categoryMatches, matchesCatalogPlace,

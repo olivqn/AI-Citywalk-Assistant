@@ -7,6 +7,33 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../route-core.js");
 
+test("shorter route may replace optional places but does not delete stops", async () => {
+    const initial = route("美罗城", "港汇恒隆广场", "武康大楼");
+    const result = await core.fitRoute({ route: initial, candidates: [stop("安福路")], allowReplace: true,
+        state: { end: "武康大楼", required_places: ["港汇恒隆广场"] }, goals: { distance: "decrease" },
+        baseline: { total_distance_meters: 900, stop_count: 3 },
+        measure: async r => ({ verified: true, distance: r.some(p => p.name === "安福路") ? 700 : 900 }) });
+    assert.equal(result.route.length, initial.length);
+    assert.equal(result.route.at(-1).name, "武康大楼");
+    assert(result.route.some(p => p.name === "港汇恒隆广场"));
+    assert.equal(result.metrics.distance, 700);
+});
+
+test("preserve order excludes reordered candidates even if they could be shorter", async () => {
+    const initial = route("美罗城", "港汇恒隆广场");
+    const observed = [];
+    await assert.rejects(core.fitRoute({ route: initial, preserveOrder: true, goals: { distance: "decrease" },
+        baseline: { total_distance_meters: 900, stop_count: 2 }, measure: async r => {
+            observed.push(r.map(p => p.name)); return { verified: true, distance: 900 };
+        } }), /未找到可行路线/);
+    assert.deepEqual(observed, [initial.map(p => p.name)]);
+});
+
+test("a category ending must really be the last stop", () => {
+    assert(core.validateRoute(route("星巴克", "安福路"), { end_category: "咖啡馆" }, {}).length);
+    assert.deepEqual(core.validateRoute(route("安福路", "星巴克"), { end_category: "咖啡馆" }, {}), []);
+});
+
 test("strict distance and stop-count boundaries are final acceptance conditions", () => {
     const r = route("美罗城", "港汇恒隆广场", "武康大楼", "安福路");
     const m = { verified: true, distance: 800 };
@@ -225,4 +252,19 @@ test("reordering rejects missing, repeated, ambiguous or invalid instructions wi
     assert.throws(() => core.orderStops([], ["美罗城"]), /还没有/);
     assert.throws(() => core.orderStops(route("星巴克(衡山路店)", "星巴克(上海图书馆店)"), ["星巴克"]), /多个地点/);
     assert.deepEqual(original.map(poi => poi.name), ["上海图书馆", "美罗城", "港汇恒隆广场"]);
+});
+
+test("complete AI swap permutations leave every other stop at its original index", () => {
+    const original = route("巴金故居", "衡复风貌馆", "武康大楼", "Rumours Coffee（湖南路店）");
+    const before = JSON.stringify(original);
+    for (const [a, b] of [[1, 3], [2, 4]]) {
+        const expected = [...original];
+        [expected[a], expected[b]] = [expected[b], expected[a]];
+        const actual = core.orderStops(original, expected.slice(1).map(poi => poi.name));
+        assert.deepEqual(actual, expected);
+        for (let i = 0; i < original.length; i++) {
+            if (i !== a && i !== b) assert.equal(actual[i], original[i]);
+        }
+    }
+    assert.equal(JSON.stringify(original), before);
 });

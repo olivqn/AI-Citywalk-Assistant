@@ -137,8 +137,10 @@ def assess(item, output, version):
     if version == "after" and output.get("status") == "unavailable":
         failures.append("模型本轮未完成")
     if version == "after" and item["id"] == "A1":
-        if output.get("status") != "needs_clarification" or not (output.get("proposal") or {}).get("clarification"):
-            failures.append("缺少起点时必须明确请求补充")
+        # Product scope changed: undecided visitors explore interests before planning.
+        # Explicit planning without an origin is separately covered by journey J13.
+        if output.get("status") != "ready" or not (output.get("proposal") or {}).get("reply"):
+            failures.append("不知道去哪应先进入兴趣对话，不强制补齐规划条件")
     for path, options in item["expected"].items():
         actual = value_at(data, path)
         if actual not in options:

@@ -40,8 +40,8 @@ NEGATION = re.compile(r"(?:不要|不想|不去|不喝|不看|不逛|避开|排�
 
 
 def normalize_name(value: str) -> str:
-    """Keep branch qualifiers/punctuation; only normalize typography and space."""
-    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value)).casefold()
+    """Normalize typography without dropping any branch qualifier text."""
+    return re.sub(r"[\s()·•]", "", unicodedata.normalize("NFKC", value)).casefold()
 
 
 def _strings(value: Any) -> Optional[List[str]]:

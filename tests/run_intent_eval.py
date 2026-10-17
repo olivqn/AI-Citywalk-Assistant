@@ -40,6 +40,10 @@ async def run(args):
         from intent_holdout_cases import all_cases as suite_cases
     elif args.suite == "flow":
         from intent_flow_cases import all_cases as suite_cases
+    elif args.suite == "companion":
+        from intent_companion_cases import all_cases as suite_cases
+    elif args.suite == "journey":
+        from intent_journey_cases import all_cases as suite_cases
     fixtures = suite_cases()
     if args.ids:
         fixtures = [item for item in fixtures if item["id"] in args.ids.split(",")]
@@ -101,6 +105,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", choices=["before", "after"], required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--suite", choices=["original", "holdout", "flow"], default="original")
+    parser.add_argument("--suite", choices=["original", "holdout", "flow", "companion", "journey"], default="original")
     parser.add_argument("--ids", help="Optional comma-separated case IDs for explicitly recorded follow-up runs")
     asyncio.run(run(parser.parse_args()))

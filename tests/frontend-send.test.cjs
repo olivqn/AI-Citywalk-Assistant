@@ -9,7 +9,97 @@ const path = require("node:path");
 const vm = require("node:vm");
 const routeCore = require("../route-core.js");
 
+const searchPayload = (intent, query, status = "ready") => ({ status, source: "model",
+    action: status === "ready" ? intent : null, trip_state: {}, comparison_baseline: {},
+    proposal: { intent, query, clarification: "你现在在哪个路口？", reply: "查询地点" } });
+
+test("discovery marks alternatives without route or condition changes and excludes repeats", async () => {
+    const query = { location: "上海图书馆", keywords: ["咖啡馆"], exclude_existing: true };
+    const { app, control, pois } = createRouteApp([planPayload(), searchPayload("find_places", query), searchPayload("find_places", query)]);
+    await sendText(app, "先规划");
+    const before = appliedView(app);
+    control.nearby.push(pois["附近咖啡馆"]);
+    await sendText(app, "其他地点标出来就行");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /已标出备选地点（未加入路线）/);
+    assert(control.maps[0].overlays.some(marker => marker.label?.text.includes("备选1")));
+    await sendText(app, "还有其他的吗");
+    assert.deepEqual(app.requests[2].body.discovery_places, ["附近咖啡馆"]);
+    assert.match(app.messages.textContent, /没有找到新的、可确认的候选/);
+    assert.deepEqual(appliedView(app), before);
+});
+
+test("urgent help persists across location reply and bypasses sightseeing exclusions", async () => {
+    const { app, control } = createRouteApp([planPayload(),
+        searchPayload("nearby_help", { keywords: ["公共厕所"] }, "needs_clarification"),
+        searchPayload("nearby_help", { location: "徐家汇地铁站", keywords: ["公共厕所"] })]);
+    await sendText(app, "先规划");
+    const before = appliedView(app);
+    await sendText(app, "我要上厕所");
+    control.nearby = [{ title: "公共厕所", point: { lng: 121.444, lat: 31.1965 }, address: "模拟公共地点" }];
+    await sendText(app, "徐家汇站");
+    assert.equal(app.requests[2].body.pending_task.intent, "nearby_help");
+    assert.deepEqual(app.requests[2].body.pending_task.query.keywords, ["公共厕所"]);
+    assert.match(app.messages.textContent, /已查找卫生间等所需设施/);
+    assert.match(app.messages.textContent, /步行约200米/);
+    assert.deepEqual(appliedView(app), before);
+});
+
 const source = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+
+test("walking guidance uses SDK steps and preserves the committed itinerary", async () => {
+    const { app, control } = createRouteApp([planPayload(),
+        searchPayload("navigate", { location: "徐家汇地铁站", targets: ["美罗城"] }),
+        searchPayload("navigate", { cancel_navigation: true })]);
+    await sendText(app, "先规划");
+    const before = appliedView(app);
+    control.steps = ["沿模拟道路步行100米", "通过模拟人行横道到达目的地"];
+    await sendText(app, "到美罗城怎么走");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /橙色线是本次指引/);
+    assert.match(app.messages.textContent, /沿模拟道路步行100米/);
+    assert.equal(app.requests[1].body.trip_state.start, "上海图书馆");
+    await sendText(app, "结束导航");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /已结束临时步行指引/);
+});
+
+test("missing navigation location survives a short next-turn location reply", async () => {
+    const { app } = createRouteApp([
+        searchPayload("navigate", { targets: ["美罗城"] }, "needs_clarification"),
+        searchPayload("navigate", { location: "徐家汇地铁站", targets: ["美罗城"] })]);
+    await sendText(app, "到美罗城怎么走");
+    await sendText(app, "徐家汇站");
+    assert.equal(app.requests[1].body.pending_task.intent, "navigate");
+    assert.deepEqual(app.requests[1].body.pending_task.query.targets, ["美罗城"]);
+    assert.match(app.messages.textContent, /地图只返回路径，未提供文字转弯步骤/);
+    assert.doesNotMatch(app.messages.textContent, /路线已生效/);
+});
+
+test("failed walking guidance does not invent directions or change the route", async () => {
+    const { app, control } = createRouteApp([planPayload(), searchPayload("navigate", { location: "徐家汇地铁站", targets: ["美罗城"] })]);
+    await sendText(app, "先规划");
+    const before = appliedView(app);
+    control.failWalking = true;
+    await sendText(app, "指路");
+    assert.deepEqual(appliedView(app), before);
+    assert.match(app.messages.textContent, /不会编造转弯方向/);
+});
+
+test("a late origin lookup cannot inject a start change into a newer conversation", async () => {
+    const { app, control } = createRouteApp([]);
+    control.holdSearch = true;
+    app.document.getElementById("gps-input").value = "徐家汇地铁站";
+    app.document.getElementById("set-start-btn").dispatch("click");
+    await flush();
+    assert.equal(control.pendingSearch.length, 1);
+    await sendText(app, "我要上厕所");
+    const before = app.messages.textContent;
+    control.pendingSearch.shift()();
+    await flush();
+    assert.equal(app.messages.textContent, before);
+    assert.doesNotMatch(app.route.textContent, /起点：徐家汇/);
+});
 
 test("production uses only the new interpretation endpoint and no raw-message route override", () => {
     assert.doesNotMatch(source, /requestJson\("\/api\/chat"/);
@@ -406,7 +496,7 @@ function createMapSdk() {
     const pois = fixturePois();
     const control = {
         queries: [], walks: [], maps: [], pendingSearch: [], pendingWalking: [],
-        holdSearch: false, holdWalking: false, failWalking: false,
+        holdSearch: false, holdWalking: false, failWalking: false, steps: [],
         nearby: [pois["一号咖啡馆"], pois["二号咖啡馆"]],
         distance: () => 200, seconds: () => 180
     };
@@ -437,7 +527,8 @@ function createMapSdk() {
             search(query) {
                 control.queries.push({ type: "name", query });
                 const name = query.replace(/^上海徐汇\s+/, "");
-                const complete = () => this.options.onSearchComplete(result(pois[name] ? [pois[name]] : []));
+                const complete = () => this.options.onSearchComplete(result(pois[name]
+                    ? (Array.isArray(pois[name]) ? pois[name] : [pois[name]]) : []));
                 if (control.holdSearch) control.pendingSearch.push(complete);
                 else queueMicrotask(complete);
             }
@@ -452,7 +543,8 @@ function createMapSdk() {
             search(start, end) {
                 control.walks.push({ start, end });
                 const complete = () => this.callback({ getPlan: () => ({
-                    getRoute: () => ({ getPath: () => [start, end] }),
+                    getRoute: () => ({ getPath: () => [start, end], getNumSteps: () => control.steps.length,
+                        getStep: index => ({ getDescription: html => { assert.equal(html, false); return control.steps[index]; } }) }),
                     getDistance: format => { assert.equal(format, false); return control.distance(start, end); },
                     getDuration: format => { assert.equal(format, false); return control.seconds(start, end); }
                 }) });
@@ -473,6 +565,28 @@ const planPayload = (state = {}) => ({
 
 const catalogFixture = { id: "curated-cafe", name: "附近咖啡馆", aliases: [], address: "上海市徐汇区武康路376号",
     tags: ["coffee", "咖啡馆"], editorial_tags: ["松弛感"], sources: [{ title: "官方资料", url: "https://example.org/place" }] };
+
+for (const verified of [true, false]) {
+    test(`navigation catalog fallback requires verified address (${verified})`, async () => {
+        const { app, control, pois } = createRouteApp([
+            searchPayload("navigate", { location: "上海图书馆", targets: ["附近咖啡馆"] })
+        ], { catalog: [catalogFixture] });
+        pois["附近咖啡馆"] = [
+            { title: "附近咖啡馆", point: { lng: 121.444, lat: 31.20 }, address: verified ? "武康路376号" : "武康路999号" },
+            { title: "附近咖啡馆", point: { lng: 121.46, lat: 31.20 }, address: "武康路888号" }
+        ];
+        const before = appliedView(app);
+        await sendText(app, "模拟测试：从上海图书馆走到附近咖啡馆");
+        assert.deepEqual(appliedView(app), before);
+        if (verified) {
+            assert.match(app.messages.textContent, /橙色线是本次指引/);
+            assert.equal(control.walks.at(-1).end.lng, 121.444);
+        } else {
+            assert.match(app.messages.textContent, /未能唯一核对指引目的地/);
+            assert.equal(control.walks.length, 0);
+        }
+    });
+}
 
 test("catalog matching adds verified tags and source link and takes priority over generic candidates", async () => {
     const { app, pois } = createRouteApp([planPayload({ duration_minutes: 60 })], { catalog: [catalogFixture] });
@@ -686,7 +800,7 @@ test("full app exact set_stops replaces all stops and never leaves an explicitly
 
 test("a generic coffee ending searches near the last stop, never geocodes the category", async () => {
     const { app, control, pois } = createRouteApp([
-        planPayload(), modifyPayload("change_end", { value: "咖啡馆" }, { end: "咖啡馆" })
+        planPayload(), modifyPayload("change_end", { value: null, value_kind: "category" }, { end: null, end_category: "咖啡馆" })
     ]);
     await sendText(app, "先安排咖啡路线");
     control.queries = [];
@@ -714,7 +828,7 @@ test("a remote explicit endpoint is rejected without changing the existing route
 
 test("missing nearby cafes produces a clear notice without an invented endpoint", async () => {
     const { app, control } = createRouteApp([
-        planPayload(), modifyPayload("change_end", { value: "咖啡馆" }, { end: "咖啡馆" })
+        planPayload(), modifyPayload("change_end", { value: null, value_kind: "category" }, { end: null, end_category: "咖啡馆" })
     ]);
     await sendText(app, "先安排咖啡路线");
     const before = appliedView(app);

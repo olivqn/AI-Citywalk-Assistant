@@ -39,6 +39,12 @@
     let hasInteraction = false;
     let turnChatResponse = null;
     let executionIntent = null;
+    let pendingTask = null;
+    let discoveryPlaces = [];
+    let discoveryQuery = null;
+    let walkingGuide = null;
+    let discoveryOverlays = [];
+    let interactionVersion = 0;
     const serviceStatus = document.getElementById("service-status");
 
     function failureDescription(data) {
@@ -164,7 +170,7 @@
             chatInput.blur?.();
             window.requestAnimationFrame?.(() => {
                 if (!map) return;
-                if (currentRoute.length) paintRoute(currentRoute, currentMetrics);
+                if (currentRoute.length || discoveryPlaces.length || walkingGuide) paintRoute(currentRoute, currentMetrics);
                 else map.centerAndZoom(currentUserPoint || new BMapGL.Point(DEFAULT_CENTER.lng, DEFAULT_CENTER.lat), 15);
             });
         }
@@ -185,6 +191,7 @@
     }
 
     function restoreSnapshot(snapshot, render = true) {
+        walkingGuide = null;
         currentRoute = snapshot.route.map(stop => ({ ...stop }));
         tripState = JSON.parse(JSON.stringify(snapshot.state));
         currentUserPoint = snapshot.point;
@@ -295,7 +302,7 @@
         sendButton.setAttribute("aria-label", value ? "停止等待" : "发送");
         sendButton.title = value ? "停止等待" : "发送";
         sendButton.setAttribute("aria-busy", String(value));
-        chatInput.placeholder = value ? "正在处理，可点击右侧方块停止等待" : "问问小徐：这附近有什么好吃的？";
+        chatInput.placeholder = value ? "正在处理，可点击右侧方块停止等待" : "找地点、问故事、改路线，或找附近卫生间";
         document.querySelectorAll(".quick-prompt").forEach(button => { button.disabled = value; });
         if (undoButton) undoButton.disabled = value || !routeSnapshots.length;
         if (mobileChatTab) mobileChatTab.textContent = value ? "对话 · 处理中" : "对话";
@@ -517,6 +524,7 @@
 
     async function setStartFromInput() {
         if (isBusy) return;
+        const version = ++interactionVersion;
         const address = gpsInput.value.trim();
         if (!address) {
             appendMessage("assistant", "请先输入一个具体起点，例如“上海图书馆”。");
@@ -530,6 +538,7 @@
         setStartButton.disabled = true;
         const point = await geocodeAddress(address);
         setStartButton.disabled = false;
+        if (version !== interactionVersion || isBusy) return;
         if (!point) {
             appendMessage("assistant", `我还没找到“${address}”，试试输入更具体的上海地标。`);
             return;
@@ -565,9 +574,9 @@
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    function searchOneKeyword(keyword, radius, center = currentUserPoint) {
+    function searchOneKeyword(keyword, radius, center = currentUserPoint, facilities = false) {
         return new Promise(resolve => {
-            if (!map || !currentUserPoint) return resolve([]);
+            if (!map || !center) return resolve([]);
             let settled = false;
             const finish = value => {
                 if (settled) return;
@@ -581,7 +590,7 @@
                     if (local.getStatus() === BMAP_STATUS_SUCCESS && result) {
                         for (let i = 0; i < result.getCurrentNumPois(); i += 1) {
                             const poi = result.getPoi(i);
-                            if (poi?.point && poi?.title && core.isUsablePoi(poi)
+                            if (poi?.point && poi?.title && (facilities ? core.inDemoArea(poi.point) : core.isUsablePoi(poi))
                                 && haversineDistance(center, poi.point) <= radius) {
                                 found.push({
                                     name: poi.title,
@@ -604,9 +613,9 @@
         });
     }
 
-    function resolveCatalogPlace(entry, radius) {
+    function resolveCatalogPlace(entry, radius, center = currentUserPoint) {
         return new Promise(resolve => {
-            if (!map || !currentUserPoint) return resolve(null);
+            if (!map || !center) return resolve(null);
             let settled = false;
             const finish = value => { if (!settled) { settled = true; resolve(value); } };
             const timer = setTimeout(() => finish(null), 6500);
@@ -619,7 +628,7 @@
                         for (let index = 0; index < result.getCurrentNumPois(); index += 1) {
                             const poi = result.getPoi(index);
                             if (core.matchesCatalogPlace(poi, entry) && core.isUsablePoi(poi)
-                                && haversineDistance(currentUserPoint, poi.point) <= radius) matches.push(poi);
+                                && haversineDistance(center, poi.point) <= radius) matches.push(poi);
                         }
                     }
                     if (!matches.length || matches.some(poi => haversineDistance(matches[0].point, poi.point) > 150)) return finish(null);
@@ -672,10 +681,11 @@
 
     async function filterPois(pois, originalMessage) {
         if (!pois.length) return [];
+        const searching = ["find_places", "nearby_help"].includes(executionIntent?.proposal?.intent);
         const removeObviousNonDestinations = items => {
             const excluded = /(有限公司|软件科技|物业|停车场|加油站|银行|医院|诊所|房产|培训|瑜伽馆|办事处|写字楼)/;
             return items.filter(item => !excluded.test(item.name) && core.isUsablePoi(item)
-                && !(tripState.excluded_places || []).some(term => core.samePlace(item.name, term) || core.categoryMatches(item, term)));
+                && !(searching ? [] : tripState.excluded_places || []).some(term => core.samePlace(item.name, term) || core.categoryMatches(item, term)));
         };
         try {
             const data = await requestJson("/api/filter_pois", {
@@ -683,14 +693,17 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     poi_names: pois.map(poi => poi.name),
-                    user_message: originalMessage,
-                    history: chatHistory.slice(-10)
+                    user_message: JSON.stringify({ request: originalMessage, active_theme: searching ? executionIntent.proposal.query.keywords : tripState.theme,
+                        interpretation: executionIntent?.proposal?.interpretation }),
+                    poi_details: pois.map(poi => ({ name: poi.name, address: poi.address, tags: poi.tags,
+                        category: poi.category, keyword: poi.keyword })),
+                    history: searching ? [] : chatHistory.slice(-10)
                 })
             });
             responseStatus(data, "filter");
             if (!Array.isArray(data.filtered_names)) return removeObviousNonDestinations(pois);
             const keep = new Set(data.filtered_names);
-            const requiredCategories = [...(tripState.required_categories || []),
+            const requiredCategories = searching ? [] : [...(tripState.required_categories || []),
                 ...(tripState.theme || []).filter(theme => /^(咖啡|咖啡馆|书店|花园|公园)$/.test(theme))];
             // Model ranking cannot silently discard every verified bookstore or garden.
             return removeObviousNonDestinations(pois.filter(poi => keep.has(poi.name)
@@ -775,12 +788,18 @@
             const walk = new BMapGL.WalkingRoute(map);
             walk.setSearchCompleteCallback(result => {
                 if (walk.getStatus() === BMAP_STATUS_SUCCESS && result?.getPlan(0)) {
-                    const plan = result.getPlan(0);
-                    const path = plan.getRoute(0)?.getPath?.() || [];
+                        const plan = result.getPlan(0);
+                        const path = plan.getRoute(0)?.getPath?.() || [];
+                        const routeSegment = plan.getRoute(0);
+                        const steps = [];
+                        for (let i = 0; i < Math.min(routeSegment?.getNumSteps?.() || 0, 100); i++) {
+                            const instruction = routeSegment.getStep(i)?.getDescription?.(false);
+                            if (typeof instruction === "string" && instruction.trim()) steps.push(instruction.trim());
+                        }
                     const distance = Number(plan.getDistance(false));
                     const seconds = Number(plan.getDuration(false));
                     finish(path.length && Number.isFinite(distance) && Number.isFinite(seconds)
-                        ? { path, distance, walkingMinutes: seconds / 60 } : null);
+                        ? { path, distance, walkingMinutes: seconds / 60, steps } : null);
                 } else {
                     finish(null);
                 }
@@ -833,7 +852,26 @@
             map.addOverlay(marker);
         });
 
-        const viewportPoints = fullPath.length ? fullPath : route.map(item => item.point);
+        discoveryOverlays = [];
+        discoveryPlaces.forEach((poi, index) => {
+            const marker = new BMapGL.Marker(poi.point);
+            const label = new BMapGL.Label(isMobileLayout() ? `备选${index + 1}` : `备选${index + 1} · ${poi.name}`, { offset: new BMapGL.Size(12, -20) });
+            label.setStyle({ backgroundColor: "#087f8c", color: "white", border: "none", padding: "4px" });
+            marker.setLabel(label);
+            marker.addEventListener("click", () => askAboutPlace(poi));
+            map.addOverlay(marker); discoveryOverlays.push(marker);
+        });
+        if (walkingGuide) {
+            map.addOverlay(new BMapGL.Polyline(walkingGuide.leg.path, { strokeColor: "#ff9800", strokeWeight: 7, strokeOpacity: 0.95 }));
+            for (const [labelText, point] of [["指引出发点", walkingGuide.from], ["指引目的地", walkingGuide.to]]) {
+                const marker = new BMapGL.Marker(point);
+                const label = new BMapGL.Label(labelText, { offset: new BMapGL.Size(10, -20) });
+                label.setStyle({ backgroundColor: "#d66a00", color: "white", border: "none", padding: "4px" });
+                marker.setLabel(label); map.addOverlay(marker);
+            }
+        }
+        const viewportPoints = walkingGuide ? walkingGuide.leg.path : discoveryPlaces.length ? discoveryPlaces.map(poi => poi.point)
+            : fullPath.length ? fullPath : route.map(item => item.point);
         // The mobile map stays laid out beneath the chat view. Fit only after
         // layout, with space for the floating route header and bottom CTA.
         if (viewportPoints.length) {
@@ -875,6 +913,9 @@
         currentRouteDistance = metrics.distance;
         currentUserPoint = route[0].point;
         currentStartName = route[0].name;
+        discoveryPlaces = [];
+        discoveryQuery = null;
+        walkingGuide = null;
         tripState.start = currentStartName;
         gpsInput.value = currentStartName;
         paintRoute(route, metrics);
@@ -960,7 +1001,8 @@
     }
 
     async function resolveNamedStop(name) {
-        const existing = currentRoute.find(stop => !stop.isStart && core.samePlace(stop.name, name));
+        const known = [...currentRoute.slice(1), ...discoveryPlaces].filter(stop => core.samePlace(stop.name, name));
+        const existing = known.length === 1 ? known[0] : null;
         if (existing) return { ...existing, isEnd: false };
         const point = await waitForMap(geocodeAddress(name));
         if (!point) throw new RouteError(`无法确认“${name}”的准确位置，请在左上角搜索核对完整名称`);
@@ -974,7 +1016,7 @@
         if (executionIntent?.proposal?.selection_mode === "only_specified" && tripState.required_places?.length) {
             const exactRoute = [{ name: currentStartName, point: currentUserPoint, isStart: true }];
             for (const name of tripState.required_places) exactRoute.push(await resolveNamedStop(name));
-            if (tripState.end) await addRouteEnd(exactRoute, tripState.end);
+            if (tripState.end || tripState.end_category) await addRouteEnd(exactRoute, tripState.end_category || tripState.end, Boolean(tripState.end_category));
             await publishRoute(exactRoute, false);
             appendRouteResult(currentRoute, currentRouteDistance, "只包含你指定的地点，没有额外加站。");
             return true;
@@ -987,7 +1029,11 @@
         progress.setStage(1, usableKeywords.join(" / "));
         const pois = await searchPois(usableKeywords, progress, originalMessage);
         progress.setStage(2, `${pois.length} 个候选 · ${pois.filter(poi => poi.catalog).length} 个来自已核对地点库`);
-        const filtered = await filterPois(pois, originalMessage);
+        let filtered = await filterPois(pois, originalMessage);
+        // End-type service is selected once at the end, not interleaved into the main theme.
+        if (tripState.end_category && !(tripState.theme || []).some(theme => theme === tripState.end_category)) {
+            filtered = filtered.filter(poi => !core.categoryMatches(poi, tripState.end_category));
+        }
         const route = buildRoute(filtered, usableKeywords);
         const mustHave = [...new Set([...(tripState.required_categories || []), ...(tripState.theme || []).filter(theme => /^(咖啡|咖啡馆|书店|花园|公园)$/.test(theme))])];
         for (const category of mustHave) {
@@ -1001,21 +1047,24 @@
         for (const name of tripState.required_places || []) {
             if (!route.some(stop => core.samePlace(stop.name, name))) route.push(await resolveNamedStop(name));
         }
-        if (tripState.end && !(await addRouteEnd(route, tripState.end))) throw new RouteError("固定终点未能加入");
+        if (!route.slice(1).length) throw new RouteError("附近未找到有依据的主题游览点；可以先查看备选地点或换个区域，不会只用咖啡终点冒充主题路线");
+        if (tripState.end || tripState.end_category) await addRouteEnd(route, tripState.end_category || tripState.end, Boolean(tripState.end_category));
         progress.setStage(3, "核对距离、必去与排除条件");
         await publishRoute(route, true);
         progress.complete();
         // Describe the actual committed stops, never the model's unexecuted itinerary.
-        appendRouteResult(currentRoute, currentRouteDistance, "按你的主题检索，已检查地点、步行距离和必去条件。");
+        appendRouteResult(currentRoute, currentRouteDistance, [interpretation || executionIntent?.proposal?.interpretation,
+            executionIntent?.proposal?.theme_status === "abstract_valid" ? "抽象主题按氛围近似检索，不代表这些地点实际提供科幻或科技体验。" : "",
+            "已核对地点和步行距离；主题匹配是候选建议，不代表已核实现场体验。"].filter(Boolean).join(" "));
         return true;
     }
 
-    async function addRouteEnd(route, requestedEnd) {
+    async function addRouteEnd(route, requestedEnd, isCategory = false) {
         if (!requestedEnd) return true;
-        const category = /^(?:附近的?|一家|一个|最后|去|喝|吃|逛|安静的?|特色的?)*(咖啡|咖啡馆|咖啡店|餐厅|书店|公园|花园|下午茶)$/.exec(requestedEnd);
+        const category = isCategory ? requestedEnd : null;
         let candidate;
         if (category) {
-            const keyword = category[1] === "咖啡" ? "咖啡馆" : category[1];
+            const keyword = category;
             const last = route.at(-1);
             const found = await waitForMap(searchOneKeyword(keyword, 1200, last.point));
             candidate = found.filter(poi => core.isUsablePoi(poi) && core.categoryMatches(poi, keyword))
@@ -1060,7 +1109,7 @@
             proposed = proposed.map(stop => ({ ...stop, isEnd: false,
                 reason: stop.isEnd && !modification.value ? "保留这个地点，不再设为固定终点。" : stop.reason }));
             tripState.end = modification.value || null;
-            if (tripState.end) await addRouteEnd(proposed, tripState.end);
+            if (tripState.end || tripState.end_category) await addRouteEnd(proposed, tripState.end || tripState.end_category, Boolean(!tripState.end && tripState.end_category));
             description = tripState.end ? `终点已改为“${tripState.end}”。` : "固定终点已取消，其他地点和顺序不变。";
         } else if (operation === "set_stops") {
             if (!modification.places?.length) throw new RouteError("请明确要保留的地点名称");
@@ -1128,7 +1177,7 @@
         const needsMore = (tripState.min_stops ?? 0) > currentRoute.length - 1
             || goals.stop_count === "increase" || (goals.distance === "increase" && goals.stop_count !== "unchanged");
         let candidates = [];
-        if (needsMore) {
+        if (needsMore || executionIntent?.proposal?.modification?.allow_replace) {
             const queries = keywords?.length ? keywords : tripState.theme?.length ? tripState.theme : ["历史建筑", "公园"];
             const progress = appendPlanningProgress(); activeProgress = progress;
             progress.setStage(1, "检索满足数量与距离条件的候选地点");
@@ -1140,6 +1189,8 @@
         }
         try {
             const result = await core.fitRoute({ route, candidates, state: tripState, goals, baseline,
+                allowReplace: Boolean(executionIntent?.proposal?.modification?.allow_replace),
+                preserveOrder: Boolean(executionIntent?.proposal?.modification?.preserve_order),
                 measure: measureRoute,
                 rank: proposed => proposed.slice(1).reduce((sum, stop, i) => sum + haversineDistance(proposed[i].point, stop.point), 0) });
             await publishRoute(result.route, false);
@@ -1159,9 +1210,79 @@
         sendMessage(`介绍一下${stop.name}，并说明它为什么适合我现在这条路线`);
     }
 
+    async function discoverPlaces(query, facility, originalMessage) {
+        if (!map) throw new RouteError("地图未就绪，暂时无法标注地点。请稍后重试");
+        const center = await waitForMap(geocodeAddress(query.location));
+        if (!center) throw new RouteError(`未确认“${query.location}”的位置，请补充附近地标或完整站名`);
+        const radius = facility ? 1200 : 2500;
+        let found = (await waitForMap(Promise.all(query.keywords.map(word => searchOneKeyword(word, radius, center, facility))))).flat();
+        if (!facility) {
+            const data = await requestJson(`/api/places/search?query=${encodeURIComponent(query.keywords.join(" "))}&limit=8`);
+            const curated = await waitForMap(Promise.all((data.places || []).map(entry => resolveCatalogPlace(entry, radius, center))));
+            found = [...curated.filter(Boolean), ...found];
+            found = await filterPois(found, JSON.stringify({ request: originalMessage, search: query }));
+        }
+        const excluded = query.exclude_existing ? [...currentRoute.slice(1), ...discoveryPlaces] : [];
+        const unique = [];
+        for (const poi of found) {
+            if (!unique.some(other => core.samePlace(other.name, poi.name)) && !excluded.some(other => core.samePlace(other.name, poi.name))) unique.push(poi);
+        }
+        let selected = unique.sort((a, b) => haversineDistance(center, a.point) - haversineDistance(center, b.point)).slice(0, 5);
+        if (facility) {
+            selected = (await waitForMap(Promise.all(selected.map(async poi => ({ ...poi,
+                walking: await walkingPathBetween(center, poi.point) }))))).sort((a, b) => (a.walking?.distance ?? Infinity) - (b.walking?.distance ?? Infinity));
+        }
+        if (activeRequest?.signal.aborted) throw new DOMException("已取消", "AbortError");
+        if (!selected.length) {
+            return "本次搜索范围内没有找到新的、可确认的候选，未重复推荐原地点，原路线没有改变。可以换个区域或放宽主题。";
+        }
+        discoveryPlaces = selected;
+        discoveryQuery = { ...query };
+        walkingGuide = null;
+        paintRoute(currentRoute, currentMetrics);
+        if (isMobileLayout()) { setPanelExpanded(false); setMobileView("map"); }
+        return `${facility ? "已查找卫生间等所需设施" : "已标出备选地点（未加入路线）"}，以“${query.location}”为搜索中心，原路线和起点未改。\n`
+            + selected.map((poi, index) => `${index + 1}. ${poi.name}｜${poi.address || "地图未提供地址"}｜${poi.walking ? `步行约${Math.ceil(poi.walking.distance)}米` : `直线约${Math.ceil(haversineDistance(center, poi.point))}米，非步行距离`}`).join("\n")
+            + (facility ? "\n仅按你提供的位置查询，未获取实时定位；入口、开放及是否可用请现场确认。紧急时也可就近询问地铁或商场工作人员。" : "\n可指定完整地点名加入路线，或继续找其他候选。地图命中不代表已核实主题体验或开放。") ;
+    }
+
+    async function guideToPlace(query) {
+        if (query.cancel_navigation) {
+            walkingGuide = null;
+            discoveryPlaces = [];
+            discoveryQuery = null;
+            paintRoute(currentRoute, currentMetrics);
+            return "已结束临时步行指引，行程路线和起点没有改变。";
+        }
+        if (!map) throw new RouteError("地图未就绪，暂时不能提供可靠步行指引");
+        const from = await waitForMap(geocodeAddress(query.location));
+        if (!from) throw new RouteError(`未能唯一核对指引出发点“${query.location}”，请补充完整地标名；原行程未变`);
+        const matches = [...currentRoute, ...discoveryPlaces].filter(poi => core.samePlace(poi.name, query.targets[0]));
+        let to = matches.length === 1 ? matches[0].point : await waitForMap(geocodeAddress(query.targets[0]));
+        if (!to) {
+            // Resolve ambiguous map titles against a server-owned street/door number,
+            // not a fuzzy text match or guessed coordinate.
+            const catalog = await requestJson(`/api/places/search?query=${encodeURIComponent(query.targets[0])}&limit=8`);
+            const exact = (catalog.places || []).filter(entry => core.samePlace(entry.name, query.targets[0]));
+            if (exact.length === 1) to = (await waitForMap(resolveCatalogPlace(exact[0], 20000, from)))?.point;
+        }
+        if (!to) throw new RouteError(`未能唯一核对指引目的地“${query.targets[0]}”，请补充完整地点名；原行程未变`);
+        const leg = await waitForMap(walkingPathBetween(from, to));
+        if (!leg) throw new RouteError("地图没有返回可核验的步行路径，暂时不能指路；不会编造转弯方向");
+        if (activeRequest?.signal.aborted) throw new DOMException("已取消", "AbortError");
+        walkingGuide = { from, to, leg };
+        paintRoute(currentRoute, currentMetrics);
+        if (isMobileLayout()) { setPanelExpanded(false); setMobileView("map"); }
+        return `从“${query.location}”到“${query.targets[0]}”：步行约${Math.ceil(leg.distance)}米，约${Math.ceil(leg.walkingMinutes)}分钟。橙色线是本次指引，原行程未改。\n`
+            + (leg.steps?.length ? leg.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")
+                : "地图只返回路径，未提供文字转弯步骤；请查看橙色线，不推测左右方向。")
+            + "\n按你提供的地标位置计算，未实时追踪；请核对现场路牌、过街及入口。位置变了可以告诉我重新查，或说‘结束导航’。";
+    }
+
     async function sendMessage(providedText = "") {
         const text = (providedText || chatInput.value).trim();
         if (!text || isBusy) return;
+        ++interactionVersion;
         hasInteraction = true;
         turnChatResponse = null;
         chatInput.value = "";
@@ -1182,6 +1303,9 @@
                     message: text,
                     history: chatHistory.slice(-12),
                     trip_state: tripState,
+                    pending_task: pendingTask,
+                    discovery_places: discoveryPlaces.map(poi => poi.name),
+                    discovery_query: discoveryQuery,
                     current_route: {
                         places: currentRoute.slice(1).map(stop => stop.name), stop_count: Math.max(0, currentRoute.length - 1),
                         total_distance_meters: currentMetrics?.verified ? currentRouteDistance : null,
@@ -1196,8 +1320,20 @@
                 failure_reason: result.failure_reason, trip_state: result.trip_state, action: result.action };
             responseStatus(data);
             const action = result.status === "ready" ? result.action : null;
+            if (result.status !== "unavailable") {
+                pendingTask = ["find_places", "nearby_help", "navigate"].includes(data.intent) && data.query
+                    ? { intent: data.intent, query: data.query } : null;
+            }
             let actionSummary;
-            if (action === "plan_route" || action === "modify_route") {
+            if (action === "navigate") {
+                actionSummary = await guideToPlace(data.query);
+                pendingTask = null;
+                appendMessage("assistant", actionSummary);
+            } else if (action === "find_places" || action === "nearby_help") {
+                actionSummary = await discoverPlaces(data.query, action === "nearby_help", text);
+                pendingTask = null;
+                appendMessage("assistant", actionSummary);
+            } else if (action === "plan_route" || action === "modify_route") {
                 actionStarted = true;
                 tripState = { ...tripState, ...(data.trip_state || {}) };
                 for (const field of data.clear_fields || []) {
@@ -1231,9 +1367,10 @@
                 if (result.status === "ready" && data.intent === "explain_place") {
                     try {
                         const answer = await requestJson("/api/place_answer", { method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ message: text, trip_state: tripState, current_route: result.comparison_baseline }) });
+                            body: JSON.stringify({ message: text, history: chatHistory.slice(-12), trip_state: tripState, current_route: result.comparison_baseline,
+                                answer_targets: data.query?.targets || [] }) });
                         reply = answer.reply;
-                        if (answer.source !== "model") {
+                        if (!["model", "catalog"].includes(answer.source)) {
                             serviceStatus.textContent = "意图已理解 · 讲解未完成";
                             serviceStatus.title = failureDescription(answer);
                         }
